@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from util.custom_tanh import CustomTanh
 
 
 class UNetDown(nn.Module):
@@ -35,15 +36,6 @@ class UNetUp(nn.Module):
         x = torch.cat((x, skip_input), 1)
 
         return x
-
-
-class CustomTanh(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    @staticmethod
-    def forward(x):
-        return (torch.tanh(x) + 1) / 2
 
 
 class GeneratorModule(nn.Module):
