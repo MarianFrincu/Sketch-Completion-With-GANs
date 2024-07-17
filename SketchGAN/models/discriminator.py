@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from models.global_discriminator import GlobalDiscriminator
-from models.local_discriminator import LocalDiscriminator
+from models.modules.global_discriminator import GlobalDiscriminator
+from models.modules.local_discriminator import LocalDiscriminator
 from util.custom_tanh import CustomTanh
 
 

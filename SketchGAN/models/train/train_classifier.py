@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,22 +10,87 @@ import numpy as np
 import time
 
 from models.sketchanet_classifier import SketchANet
+from util.binarize import binarize
+from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
+
+
+def train_model(model, loader, criterion, optimizer, device):
+    model.train()
+    total_loss = 0.0
+    total_accuracy = 0.0
+    for inputs, labels in tqdm(loader, desc='Train', bar_format=BAR_FORMAT):
+        inputs, labels = inputs.to(device), labels.to(device)
+
+        inputs = binarize(inputs)
+
+        optimizer.zero_grad()
+        outputs = model(inputs)
+
+        # batch loss
+        loss = criterion(outputs, labels)
+        total_loss += loss.item()
+
+        # calculate and update gradients
+        loss.backward()
+        optimizer.step()
+
+        _, predicted = torch.max(outputs.data, dim=1)
+        # batch accuracy
+        accuracy = (predicted == labels).sum().item() / labels.size(0)
+        total_accuracy += accuracy
+
+        # entire epoch loss
+    total_loss /= len(loader)
+    # entire epoch accuracy
+    total_accuracy /= len(loader)
+    return total_loss, total_accuracy
+
+
+def validate_model(model, loader, criterion, device):
+    model.eval()
+    total_loss = 0.0
+    total_accuracy = 0.0
+    with torch.no_grad():
+        for inputs, labels in tqdm(loader, desc='Validation',bar_format=BAR_FORMAT):
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            inputs = binarize(inputs)
+
+            outputs = model(inputs)
+            # batch loss
+            loss = criterion(outputs, labels)
+            total_loss += loss.item()
+
+            _, predicted = torch.max(outputs.data, dim=1)
+            # batch accuracy
+            accuracy = (predicted == labels).sum().item() / labels.size(0)
+            total_accuracy += accuracy
+
+    # entire epoch loss
+    total_loss /= len(loader)
+    # entire epoch accuracy
+    total_accuracy /= len(loader)
+    return total_loss, total_accuracy
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# model initialization
 model = SketchANet(in_channels=3, num_classes=125)
 model.to(device)
 
 # train configuration
-train_data_dir = '../../datasets/Sketchy/images/original_split/train/'
-val_data_dir = '../../datasets/Sketchy/images/original_split/val/'
-batch_size = 32
-num_epochs = 100
+batch_size = 256
+num_epochs = 50
 lr = 1e-4
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
 # data preparation
+test_data_dir = '../../datasets/Sketchy/original/test/'
+train_data_dir = '../../datasets/Sketchy/original/train/'
+val_data_dir = '../../datasets/Sketchy/original/val/'
+
 transform = transforms.Compose([
     transforms.Resize((225, 225)),
     transforms.ToTensor(),
@@ -37,63 +103,35 @@ val_dataset = ImageFolder(root=val_data_dir, transform=transform)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
 # best model checkpoint
-best_val_loss = np.Inf
+best_val_loss = np.inf
+best_val_accuracy = 0.0
 patience = 10
 count_epochs = 0
-trained_models_dir = "../../trained_models/classifier"
-best_model_filename = "best_model2.pth"
+trained_models_dir = "../../trained_models/SketchANet"
+best_model_filename = "best_model.pth"
+loaded_model_filename = ""
 
-for epoch in range(num_epochs):
-    print('Epoch {}/{}'.format(epoch + 1, num_epochs))
+print(FONT_COLOR)
+
+# model load
+if os.path.isfile(f'{trained_models_dir}/{loaded_model_filename}'):
+    print('Loading model...')
     time.sleep(0.1)
 
-    model.train()
-    train_loss = 0.0
-    correct_train = 0
-    for inputs, labels in tqdm(train_loader, desc='Train', colour="magenta"):
-        inputs, labels = inputs.to(device), labels.to(device)
+    model.load_state_dict(torch.load(f'{trained_models_dir}/{loaded_model_filename}'))
+    best_val_loss, best_val_accuracy = validate_model(model, val_loader, criterion, device)
 
-        # binarize inputs
-        inputs[inputs < 1.] = 0.
-        inputs = 1. - inputs
+for epoch in range(num_epochs):
 
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+    print(f'\nEpoch {epoch + 1}/{num_epochs}')
+    time.sleep(0.1)
 
-        train_loss += loss.item()
-
-        _, predicted = torch.max(outputs.data, 1)
-        correct_train += (predicted == labels).sum().item() / labels.size(0)
-
-    train_loss /= len(train_loader)
-    train_accuracy = correct_train / len(train_loader)
+    train_loss, train_accuracy = train_model(model, train_loader, criterion, optimizer, device)
 
     print(f'loss: {train_loss:.3f}  accuracy: {train_accuracy:.3f}')
     time.sleep(0.1)
 
-    model.eval()
-    val_loss = 0.0
-    correct_val = 0
-    with torch.no_grad():
-        for inputs, labels in tqdm(val_loader, desc='Validation', colour="magenta"):
-            inputs, labels = inputs.to(device), labels.to(device)
-
-            # binarize inputs
-            inputs[inputs < 1.] = 0.
-            inputs = 1. - inputs
-
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            val_loss += loss.item()
-
-            _, predicted = torch.max(outputs.data, 1)
-            correct_val += (predicted == labels).sum().item() / labels.size(0)
-
-    val_loss /= len(val_loader)
-    val_accuracy = correct_val / len(val_loader)
+    val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
     print(f'loss: {val_loss:.3f}  accuracy: {val_accuracy:.3f}')
     time.sleep(0.1)
@@ -108,3 +146,5 @@ for epoch in range(num_epochs):
         break
 
     time.sleep(0.1)
+
+print(RESET_COLOR)

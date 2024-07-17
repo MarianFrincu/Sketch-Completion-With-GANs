@@ -1,0 +1,6 @@
+
+# ansi console consts
+FONT_COLOR = '\033[38;2;207;142;109m'
+LOADING_BAD_COLOR = '\033[38;2;36;165;162m'
+RESET_COLOR = '\033[0m'
+BAR_FORMAT = f'{FONT_COLOR}{{l_bar}}{LOADING_BAD_COLOR}{{bar}}{FONT_COLOR}{{r_bar}}{RESET_COLOR}'
