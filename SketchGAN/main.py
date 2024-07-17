@@ -9,8 +9,8 @@ import cv2
 gen = Generator(3, 3)
 disc = Discriminator()
 
-img_path = 'n02395406_1616-10.png'
-small_img_path = 'n02395406_1616-10_small.png'
+img_path = 'test_images/n02395406_1616-10.png'
+small_img_path = 'test_images/n02395406_1616-10_small.png'
 
 image = cv2.imread(img_path)
 image1 = cv2.imread(small_img_path)
