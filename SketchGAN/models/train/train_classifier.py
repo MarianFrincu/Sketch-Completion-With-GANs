@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
+from torchvision.transforms import InterpolationMode
 from tqdm import tqdm
 import numpy as np
 import time
@@ -51,7 +52,7 @@ def validate_model(model, loader, criterion, device):
     total_loss = 0.0
     total_accuracy = 0.0
     with torch.no_grad():
-        for inputs, labels in tqdm(loader, desc='Validation',bar_format=BAR_FORMAT):
+        for inputs, labels in tqdm(loader, desc='Validation', bar_format=BAR_FORMAT):
             inputs, labels = inputs.to(device), labels.to(device)
 
             inputs = binarize(inputs)
@@ -80,9 +81,9 @@ model = SketchANet(in_channels=3, num_classes=125)
 model.to(device)
 
 # train configuration
-batch_size = 256
-num_epochs = 50
-lr = 1e-4
+batch_size = 512
+num_epochs = 250
+lr = 1e-3
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -92,15 +93,17 @@ train_data_dir = '../../datasets/Sketchy/original/train/'
 val_data_dir = '../../datasets/Sketchy/original/val/'
 
 transform = transforms.Compose([
-    transforms.Resize((225, 225)),
     transforms.ToTensor(),
+    transforms.RandomCrop((225, 225)),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(5, interpolation=InterpolationMode.BILINEAR),
 ])
 
 train_dataset = ImageFolder(root=train_data_dir, transform=transform)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
 
 val_dataset = ImageFolder(root=val_data_dir, transform=transform)
-val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
 
 # best model checkpoint
 best_val_loss = np.inf
@@ -140,6 +143,7 @@ for epoch in range(num_epochs):
     if val_loss < best_val_loss:
         best_val_loss = val_loss
         count_epochs = 0
+        os.makedirs(trained_models_dir, exist_ok=True)
         torch.save(model.state_dict(), f'{trained_models_dir}/{best_model_filename}')
 
     if count_epochs > patience:
