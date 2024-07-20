@@ -1,15 +1,19 @@
+import os
 import time
 
 import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader
+from torchvision.transforms import transforms
 from tqdm import tqdm
 
 from models.discriminator import Discriminator
 from models.generator import Generator
 from models.modules.criterion import DiscriminatorLoss, GeneratorLoss
 from models.sketchanet_classifier import SketchANet
+from util.binarize import binarize
+from util.flow_csv_dataset import CsvDataset
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
 
 if __name__ == '__main__':
@@ -38,11 +42,33 @@ if __name__ == '__main__':
     disc_optim = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
 
     # data preparation
-    # to do
-    data = DataLoader
+    csv_file_path = '../../datasets/Sketchy/train_labels.csv'
+    corrupted_dir = '../../datasets/Sketchy/corrupted/train'
+    original_dir = '../../datasets/Sketchy/original/train'
 
-    # load model
-    # to do
+    transform = transforms.Compose([
+        # add other augmentation techniques if necessary
+        transforms.ToTensor()
+    ])
+
+    csv_dataset = CsvDataset(csv_file=csv_file_path,
+                             corrupted_dir=corrupted_dir,
+                             original_dir=original_dir,
+                             transform=transform)
+
+    data = DataLoader(dataset=csv_dataset,
+                      batch_size=batch_size,
+                      shuffle=True,
+                      # num_workers=1
+                      )
+
+    # load classifier model
+    classifier_dir = "../../trained_models/SketchANet"
+    classifier_weights = "best_model.pth"
+    if not os.path.isfile(f'{classifier_dir}/{classifier_weights}'):
+        raise FileNotFoundError(f'{classifier_dir}/{classifier_weights} is not found.')
+
+    classifier.load_state_dict(torch.load(f'{classifier_dir}/{classifier_weights}'))
 
     generator.train()
     discriminator.train()
@@ -55,14 +81,19 @@ if __name__ == '__main__':
         gen_epoch_loss = 0.0
         disc_epoch_loss = 0.0
 
-        for (original, corrupted, labels) in tqdm(data, desc='Train', bar_format=BAR_FORMAT):
-            original, corrupted, labels = original.to(device), corrupted.to(device), labels.to(device)
+        for (corrupted, original, labels) in tqdm(data, desc='Train', bar_format=BAR_FORMAT):
+            corrupted, original, labels = corrupted.to(device), original.to(device), labels.to(device)
 
             generated = generator(corrupted)
             fake_pred = discriminator(corrupted, nn.functional.interpolate(generated, size=128))
 
             with torch.no_grad():
-                predicted_labels = classifier(generated)
+                # preprocess generator output data and do inference on classifier model
+                classifier_transform = transforms.Compose([transforms.RandomCrop((225, 225))])
+                classifier_input = classifier_transform(generated)
+                classifier_input = binarize(classifier_input)
+
+                predicted_labels = classifier(classifier_input)
                 classifier_loss = classifier_criterion(predicted_labels, labels)
 
             gen_loss = gen_criterion(original, generated, fake_pred, classifier_loss)
