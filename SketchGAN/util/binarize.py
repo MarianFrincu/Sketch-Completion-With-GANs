@@ -1,5 +1,4 @@
-
-def binarize(tensor):
-    tensor[tensor < 1.] = 0.
+def binarize(tensor, threshold=0.5):
+    tensor[tensor < threshold] = 0.
     tensor = 1. - tensor
     return tensor

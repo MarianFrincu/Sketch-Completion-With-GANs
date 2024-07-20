@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from util.custom_tanh import CustomTanh
 
 
 class UNetDown(nn.Module):
@@ -62,7 +61,6 @@ class GeneratorModule(nn.Module):
             nn.Upsample(scale_factor=2),
             nn.ZeroPad2d((1, 0, 1, 0)),
             nn.Conv2d(128, out_channels, kernel_size, padding=1),
-            CustomTanh()
         )
 
     def forward(self, x):
@@ -82,4 +80,4 @@ class GeneratorModule(nn.Module):
         u6 = self.up6(u5, d2)
         u7 = self.up7(u6, d1)
 
-        return self.final(u7)
+        return (torch.tanh(self.final(u7)) + 1) / 2

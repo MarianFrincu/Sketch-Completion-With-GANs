@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
+
 from models.modules.global_discriminator import GlobalDiscriminator
 from models.modules.local_discriminator import LocalDiscriminator
-from util.custom_tanh import CustomTanh
 
 
 class Discriminator(nn.Module):
@@ -13,7 +13,6 @@ class Discriminator(nn.Module):
         self.local_discriminator = LocalDiscriminator()
         self.fully_connected = nn.Linear(2048, 1)
         self.activation = nn.ReLU()
-        self.custom_tanh = CustomTanh()
 
     def forward(self, x, y):
         x = self.global_discriminator(x)
@@ -23,4 +22,4 @@ class Discriminator(nn.Module):
         y = self.fully_connected(y_x_concat)
         y = self.activation(y)
 
-        return self.custom_tanh(y)
+        return (torch.tanh(y) + 1) / 2

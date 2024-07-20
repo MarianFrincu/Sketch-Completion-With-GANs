@@ -7,10 +7,10 @@ from torch.utils.data import Dataset
 
 
 class CsvDataset(Dataset):
-    def __init__(self, csv_file, original_dir, corrupted_dir, transform=None):
+    def __init__(self, csv_file, corrupted_dir, original_dir, transform=None):
         self.data_frame = pd.read_csv(csv_file)
-        self.original_dir = original_dir
         self.corrupted_dir = corrupted_dir
+        self.original_dir = original_dir
         self.transform = transform
 
         class_names = pd.read_csv(csv_file)['class_name'].unique()

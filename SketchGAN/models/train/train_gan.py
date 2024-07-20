@@ -18,6 +18,7 @@ from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    num_workers = 0
 
     # model initialization
     generator = Generator(3, 3)
@@ -30,7 +31,7 @@ if __name__ == '__main__':
 
     # train configuration
     batch_size = 16
-    num_epochs = 20
+    num_epochs = 100
     lr = 1e-3
     lambda1 = 100
     lambda2 = 0.5
@@ -51,20 +52,14 @@ if __name__ == '__main__':
         transforms.ToTensor()
     ])
 
-    csv_dataset = CsvDataset(csv_file=csv_file_path,
-                             corrupted_dir=corrupted_dir,
-                             original_dir=original_dir,
-                             transform=transform)
-
-    data = DataLoader(dataset=csv_dataset,
+    data = DataLoader(dataset=CsvDataset(csv_file_path, corrupted_dir, original_dir, transform),
                       batch_size=batch_size,
                       shuffle=True,
-                      # num_workers=1
-                      )
+                      num_workers=num_workers)
 
     # load classifier model
     classifier_dir = "../../trained_models/SketchANet"
-    classifier_weights = "best_model.pth"
+    classifier_weights = "best_model1.pth"
     if not os.path.isfile(f'{classifier_dir}/{classifier_weights}'):
         raise FileNotFoundError(f'{classifier_dir}/{classifier_weights} is not found.')
 
@@ -84,6 +79,9 @@ if __name__ == '__main__':
         for (corrupted, original, labels) in tqdm(data, desc='Train', bar_format=BAR_FORMAT):
             corrupted, original, labels = corrupted.to(device), original.to(device), labels.to(device)
 
+            corrupted = binarize(corrupted)
+            original = binarize(original)
+
             generated = generator(corrupted)
             fake_pred = discriminator(corrupted, nn.functional.interpolate(generated, size=128))
 
@@ -91,7 +89,6 @@ if __name__ == '__main__':
                 # preprocess generator output data and do inference on classifier model
                 classifier_transform = transforms.Compose([transforms.RandomCrop((225, 225))])
                 classifier_input = classifier_transform(generated)
-                classifier_input = binarize(classifier_input)
 
                 predicted_labels = classifier(classifier_input)
                 classifier_loss = classifier_criterion(predicted_labels, labels)

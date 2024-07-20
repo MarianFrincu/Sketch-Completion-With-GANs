@@ -1,13 +1,14 @@
 import os
+import time
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 from tqdm import tqdm
-import numpy as np
-import time
 
 from models.sketchanet_classifier import SketchANet
 from util.binarize import binarize
@@ -75,22 +76,24 @@ def validate_model(model, loader, criterion, device):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    num_workers = 6
 
     # model initialization
-    model = SketchANet(in_channels=3, num_classes=125)
-    model.to(device)
+    classifier = SketchANet(in_channels=3, num_classes=125)
+    classifier.to(device)
 
     # train configuration
-    batch_size = 256
+    batch_size = 135
     num_epochs = 250
     lr = 1e-3
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(classifier.parameters(), lr=lr)
 
     # data preparation
     test_data_dir = '../../datasets/Sketchy/original/test/'
     train_data_dir = '../../datasets/Sketchy/original/train/'
     val_data_dir = '../../datasets/Sketchy/original/val/'
+    trained_models_dir = '../../trained_models/SketchANet'
 
     transform = transforms.Compose([
         transforms.RandomCrop((225, 225)),
@@ -101,60 +104,79 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         ImageFolder(root=train_data_dir, transform=transform),
         batch_size=batch_size,
-        shuffle=True, num_workers=2
+        shuffle=True,
+        num_workers=num_workers
     )
 
     test_loader = DataLoader(
         ImageFolder(root=test_data_dir, transform=transform),
         batch_size=batch_size,
-        shuffle=True, num_workers=2
+        shuffle=True,
+        num_workers=num_workers
     )
 
     val_loader = DataLoader(
         ImageFolder(root=val_data_dir, transform=transform),
         batch_size=batch_size,
-        shuffle=True, num_workers=2
+        shuffle=True,
+        num_workers=num_workers
     )
 
     # best model checkpoint
-    best_val_loss = np.inf
-    best_val_accuracy = 0.0
-    patience = 256
-    count_epochs = 0
-    trained_models_dir = "../../trained_models/SketchANet"
-    best_model_filename = "best_model.pth"
-    loaded_model_filename = ""
+    best_model_checkpoint = {
+        "val_loss": np.inf,
+        "val_accuracy": 0.0,
+        "filename": "best_model1.pth",
+    }
+
+    continue_train = {
+        "from_epoch": 0,
+        "from_weights": "",
+    }
+
+    early_stopping = {
+        "patience": num_epochs,
+        "count_epochs": 0,
+    }
 
     # model load
-    if os.path.isfile(f'{trained_models_dir}/{loaded_model_filename}'):
+    if os.path.isfile(loaded_model_path := f'{trained_models_dir}/{continue_train["from_weights"]}'):
         print(f'{FONT_COLOR}Loading model...')
         time.sleep(0.1)
 
-        model.load_state_dict(torch.load(f'{trained_models_dir}/{loaded_model_filename}'))
-        best_val_loss, best_val_accuracy = validate_model(model, val_loader, criterion, device)
+        classifier.load_state_dict(torch.load(loaded_model_path))
+        val_loss, val_accuracy = validate_model(classifier, val_loader, criterion, device)
+        best_model_checkpoint["val_loss"] = val_loss
+        best_model_checkpoint["val_accuracy"] = val_accuracy
 
-    for epoch in range(num_epochs):
+        print(f'loss: {val_loss:.3f}  accuracy: {val_accuracy:.3f}')
+        time.sleep(0.1)
+
+    for epoch in range(continue_train["from_epoch"], num_epochs):
+
         print(f'{FONT_COLOR}\nEpoch {epoch + 1}/{num_epochs}')
         time.sleep(0.1)
 
-        train_loss, train_accuracy = train_model(model, train_loader, criterion, optimizer, device)
+        train_loss, train_accuracy = train_model(classifier, train_loader, criterion, optimizer, device)
 
         print(f'{FONT_COLOR}loss: {train_loss:.3f}  accuracy: {train_accuracy:.3f}')
         time.sleep(0.1)
 
-        val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
+        val_loss, val_accuracy = validate_model(classifier, val_loader, criterion, device)
 
         print(f'{FONT_COLOR}loss: {val_loss:.3f}  accuracy: {val_accuracy:.3f}')
         time.sleep(0.1)
 
-        count_epochs += 1
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            count_epochs = 0
-            os.makedirs(trained_models_dir, exist_ok=True)
-            torch.save(model.state_dict(), f'{trained_models_dir}/{best_model_filename}')
+        early_stopping["count_epochs"] += 1
+        if val_loss < best_model_checkpoint["val_loss"]:
+            best_model_checkpoint["val_loss"] = val_loss
+            early_stopping["count_epochs"] = 0
 
-        if count_epochs > patience:
+            # save current best model
+            os.makedirs(trained_models_dir, exist_ok=True)
+            torch.save(classifier.state_dict(), f'{trained_models_dir}/{best_model_checkpoint["filename"]}')
+
+        if early_stopping["count_epochs"] > early_stopping["patience"]:
             break
 
         time.sleep(0.1)
