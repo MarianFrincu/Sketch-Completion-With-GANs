@@ -5,7 +5,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
-from torchvision.transforms import InterpolationMode
 from tqdm import tqdm
 import numpy as np
 import time
@@ -74,81 +73,90 @@ def validate_model(model, loader, criterion, device):
     return total_loss, total_accuracy
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# model initialization
-model = SketchANet(in_channels=3, num_classes=125)
-model.to(device)
+    # model initialization
+    model = SketchANet(in_channels=3, num_classes=125)
+    model.to(device)
 
-# train configuration
-batch_size = 512
-num_epochs = 250
-lr = 1e-3
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=lr)
+    # train configuration
+    batch_size = 256
+    num_epochs = 250
+    lr = 1e-3
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
-# data preparation
-test_data_dir = '../../datasets/Sketchy/original/test/'
-train_data_dir = '../../datasets/Sketchy/original/train/'
-val_data_dir = '../../datasets/Sketchy/original/val/'
+    # data preparation
+    test_data_dir = '../../datasets/Sketchy/original/test/'
+    train_data_dir = '../../datasets/Sketchy/original/train/'
+    val_data_dir = '../../datasets/Sketchy/original/val/'
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.RandomCrop((225, 225)),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(5, interpolation=InterpolationMode.BILINEAR),
-])
+    transform = transforms.Compose([
+        transforms.RandomCrop((225, 225)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+    ])
 
-train_dataset = ImageFolder(root=train_data_dir, transform=transform)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
+    train_loader = DataLoader(
+        ImageFolder(root=train_data_dir, transform=transform),
+        batch_size=batch_size,
+        shuffle=True, num_workers=2
+    )
 
-val_dataset = ImageFolder(root=val_data_dir, transform=transform)
-val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
+    test_loader = DataLoader(
+        ImageFolder(root=test_data_dir, transform=transform),
+        batch_size=batch_size,
+        shuffle=True, num_workers=2
+    )
 
-# best model checkpoint
-best_val_loss = np.inf
-best_val_accuracy = 0.0
-patience = 10
-count_epochs = 0
-trained_models_dir = "../../trained_models/SketchANet"
-best_model_filename = "best_model.pth"
-loaded_model_filename = ""
+    val_loader = DataLoader(
+        ImageFolder(root=val_data_dir, transform=transform),
+        batch_size=batch_size,
+        shuffle=True, num_workers=2
+    )
 
-print(FONT_COLOR)
+    # best model checkpoint
+    best_val_loss = np.inf
+    best_val_accuracy = 0.0
+    patience = 256
+    count_epochs = 0
+    trained_models_dir = "../../trained_models/SketchANet"
+    best_model_filename = "best_model.pth"
+    loaded_model_filename = ""
 
-# model load
-if os.path.isfile(f'{trained_models_dir}/{loaded_model_filename}'):
-    print('Loading model...')
-    time.sleep(0.1)
+    # model load
+    if os.path.isfile(f'{trained_models_dir}/{loaded_model_filename}'):
+        print(f'{FONT_COLOR}Loading model...')
+        time.sleep(0.1)
 
-    model.load_state_dict(torch.load(f'{trained_models_dir}/{loaded_model_filename}'))
-    best_val_loss, best_val_accuracy = validate_model(model, val_loader, criterion, device)
+        model.load_state_dict(torch.load(f'{trained_models_dir}/{loaded_model_filename}'))
+        best_val_loss, best_val_accuracy = validate_model(model, val_loader, criterion, device)
 
-for epoch in range(num_epochs):
+    for epoch in range(num_epochs):
+        print(f'{FONT_COLOR}\nEpoch {epoch + 1}/{num_epochs}')
+        time.sleep(0.1)
 
-    print(f'\nEpoch {epoch + 1}/{num_epochs}')
-    time.sleep(0.1)
+        train_loss, train_accuracy = train_model(model, train_loader, criterion, optimizer, device)
 
-    train_loss, train_accuracy = train_model(model, train_loader, criterion, optimizer, device)
+        print(f'{FONT_COLOR}loss: {train_loss:.3f}  accuracy: {train_accuracy:.3f}')
+        time.sleep(0.1)
 
-    print(f'loss: {train_loss:.3f}  accuracy: {train_accuracy:.3f}')
-    time.sleep(0.1)
+        val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
-    val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
+        print(f'{FONT_COLOR}loss: {val_loss:.3f}  accuracy: {val_accuracy:.3f}')
+        time.sleep(0.1)
 
-    print(f'loss: {val_loss:.3f}  accuracy: {val_accuracy:.3f}')
-    time.sleep(0.1)
+        count_epochs += 1
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            count_epochs = 0
+            os.makedirs(trained_models_dir, exist_ok=True)
+            torch.save(model.state_dict(), f'{trained_models_dir}/{best_model_filename}')
 
-    count_epochs += 1
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        count_epochs = 0
-        os.makedirs(trained_models_dir, exist_ok=True)
-        torch.save(model.state_dict(), f'{trained_models_dir}/{best_model_filename}')
+        if count_epochs > patience:
+            break
 
-    if count_epochs > patience:
-        break
+        time.sleep(0.1)
 
-    time.sleep(0.1)
-
-print(RESET_COLOR)
+    print(RESET_COLOR)

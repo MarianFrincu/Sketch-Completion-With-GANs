@@ -40,7 +40,7 @@ with torch.no_grad():
     disc.eval()
     discriminated_pred = disc(tensor_image, tensor_image1)
 
-np_img = generated_img.squeeze(0).cpu().numpy()
+np_img = generated_img.squeeze(0).numpy()
 
 np_img = np.transpose(np_img, (1, 2, 0))
 np_img = np.clip(np_img, 0, 1)
