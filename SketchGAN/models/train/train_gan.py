@@ -12,8 +12,8 @@ from models.discriminator import Discriminator
 from models.generator import Generator
 from models.modules.criterion import DiscriminatorLoss, GeneratorLoss
 from models.sketchanet_classifier import SketchANet
-from util.binarize import binarize
 from util.flow_csv_dataset import CsvDataset
+from util.image_transforms import binarize, invert
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
 
 if __name__ == '__main__':
@@ -80,7 +80,9 @@ if __name__ == '__main__':
             corrupted, original, labels = corrupted.to(device), original.to(device), labels.to(device)
 
             corrupted = binarize(corrupted)
+            corrupted = invert(corrupted)
             original = binarize(original)
+            original = invert(original)
 
             generated = generator(corrupted)
             fake_pred = discriminator(corrupted, nn.functional.interpolate(generated, size=128))

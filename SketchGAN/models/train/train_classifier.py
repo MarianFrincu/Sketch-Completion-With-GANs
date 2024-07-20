@@ -11,7 +11,7 @@ from torchvision.datasets import ImageFolder
 from tqdm import tqdm
 
 from models.sketchanet_classifier import SketchANet
-from util.binarize import binarize
+from util.image_transforms import binarize, invert
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
 
 
@@ -23,6 +23,7 @@ def train_model(model, loader, criterion, optimizer, device):
         inputs, labels = inputs.to(device), labels.to(device)
 
         inputs = binarize(inputs)
+        inputs = invert(inputs)
 
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -56,6 +57,7 @@ def validate_model(model, loader, criterion, device):
             inputs, labels = inputs.to(device), labels.to(device)
 
             inputs = binarize(inputs)
+            inputs = invert(inputs)
 
             outputs = model(inputs)
             # batch loss
