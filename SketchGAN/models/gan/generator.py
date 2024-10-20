@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.modules.generator_module import GeneratorModule
+from models.gan.modules.generator_module import GeneratorModule
 
 
 class Generator(nn.Module):

@@ -1,7 +1,7 @@
 import torch
 
-from models.discriminator import Discriminator
-from models.generator import Generator
+from models.gan.discriminator import Discriminator
+from models.gan.generator import Generator
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2

@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from models.modules.global_discriminator import GlobalDiscriminator
-from models.modules.local_discriminator import LocalDiscriminator
+from models.gan.modules.global_discriminator import GlobalDiscriminator
+from models.gan.modules.local_discriminator import LocalDiscriminator
 
 
 class Discriminator(nn.Module):

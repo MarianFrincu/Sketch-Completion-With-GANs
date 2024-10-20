@@ -8,10 +8,10 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
-from models.discriminator import Discriminator
-from models.generator import Generator
-from models.modules.criterion import DiscriminatorLoss, GeneratorLoss
-from models.sketchanet_classifier import SketchANet
+from models.gan.discriminator import Discriminator
+from models.gan.generator import Generator
+from models.gan.modules.criterion import DiscriminatorLoss, GeneratorLoss
+from models.classifier.sketchanet import SketchANet
 from util.flow_csv_dataset import CsvDataset
 from util.image_transforms import binarize, invert
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
