@@ -10,7 +10,7 @@ from torchvision.datasets import ImageFolder
 
 from models.classifier.sketchanet import SketchANet
 from util.text_format_consts import FONT_COLOR, RESET_COLOR
-from util.image_transforms import normalize, binarize, random_shift
+from util.image_transforms import random_shift
 from util.custom_dataset import CustomDataset
 from models.classifier.model_funcs import train_ensemble, validate_ensemble
 
@@ -56,17 +56,13 @@ if __name__ == "__main__":
         transforms.RandomCrop((225, 225)),
         transforms.RandomHorizontalFlip(),
         transforms.Lambda(random_shift),
-        transforms.ToTensor(),
-        transforms.Lambda(normalize),
-        transforms.Lambda(binarize),
+        transforms.ToTensor()
     ])
 
     val_transforms = transforms.Compose([
         transforms.Grayscale(num_output_channels=1),
         transforms.Resize((225, 225)),
-        transforms.ToTensor(),
-        transforms.Lambda(normalize),
-        transforms.Lambda(binarize),
+        transforms.ToTensor()
     ])
 
     # cross-validation with 3 folds
