@@ -1,0 +1,28 @@
+{
+    "config": {
+        "num_workers": 10,
+        "initial_epoch": 1,
+        "epochs": [
+            20,
+            30
+        ],
+        "learning_rates": [
+            1e-4,
+            1e-4
+        ],
+        "weight_decay": 0,
+        "batch_size": 135,
+        "num_folds": 3,
+        "num_classes": 250,
+        "freeze": false,
+        "model_dir": "trained_models/resnet18_finetune_Tu_Berlin",
+        "continue_train": false,
+        "model_to_load": ""
+    },
+    "data": [
+        "datasets/TU_Berlin/all_images",
+        "datasets/TU_Berlin/augmented/def_local",
+        "datasets/TU_Berlin/augmented/def_local_global",
+        "datasets/TU_Berlin/augmented/rm"
+    ]
+}

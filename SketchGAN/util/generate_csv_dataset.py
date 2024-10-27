@@ -1,9 +1,9 @@
 import os
 import pandas as pd
 
-original_dir = '../datasets/Sketchy/original/train'
-corrupted_dir = '../datasets/Sketchy/corrupted/train'
-csv_output_path = '../datasets/Sketchy/train_labels.csv'
+original_dir = '../datasets/Sketchy/original/all_images'
+corrupted_dir = '../datasets/Sketchy/corrupted/all_images'
+csv_output_path = '../datasets/Sketchy/sketchy_labels.csv'
 
 data = []
 
