@@ -2,66 +2,70 @@ import torch
 import torch.nn as nn
 
 
-class UNetDown(nn.Module):
-    def __init__(self, in_size, out_size, kernel_size=4, stride=2, padding=1, normalize=True, dropout=0.0):
+class Block(nn.Module):
+    def __init__(self, mode, in_channels, out_channels, kernel_size, stride, padding, batch_norm=True,
+                 activation='relu', dropout=0.0):
         super().__init__()
-        layers = [nn.Conv2d(in_size, out_size, kernel_size, stride, padding, bias=False)]
-        if normalize:
-            layers.append(nn.BatchNorm2d(out_size))
-        layers.append(nn.LeakyReLU(0.2))
-        if dropout:
+        layers = []
+
+        if mode == 'encoder':
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False))
+        elif mode == 'decoder':
+            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding, bias=False))
+
+        if batch_norm:
+            layers.append(nn.BatchNorm2d(out_channels))
+
+        if 0.0 < dropout < 1.0:
             layers.append(nn.Dropout(dropout))
+
+        if activation == 'relu':
+            layers.append(nn.ReLU())
+        elif activation == 'leaky':
+            layers.append(nn.LeakyReLU(0.2))
+
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.model(x)
 
 
-class UNetUp(nn.Module):
-    def __init__(self, in_size, out_size, kernel_size=4, stride=2, padding=1, dropout=0.0):
-        super().__init__()
-        layers = [
-            nn.ConvTranspose2d(in_size, out_size, kernel_size, stride, padding, bias=False),
-            nn.BatchNorm2d(out_size),
-            nn.ReLU(inplace=True)
-        ]
-        if dropout:
-            layers.append(nn.Dropout(dropout))
-
-        self.model = nn.Sequential(*layers)
-
-    def forward(self, x, skip_input):
-        x = self.model(x)
-        x = torch.cat((x, skip_input), 1)
-
-        return x
-
-
 class GeneratorModule(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.down1 = UNetDown(in_channels, 64, kernel_size, stride, padding, normalize=False)
-        self.down2 = UNetDown(64, 128, kernel_size, stride, padding)
-        self.down3 = UNetDown(128, 256, kernel_size, stride, padding)
-        self.down4 = UNetDown(256, 512, kernel_size, stride, padding, dropout=0.5)
-        self.down5 = UNetDown(512, 512, kernel_size, stride, padding, dropout=0.5)
-        self.down6 = UNetDown(512, 512, kernel_size, stride, padding, dropout=0.5)
-        self.down7 = UNetDown(512, 512, kernel_size, stride, padding, dropout=0.5)
-        self.down8 = UNetDown(512, 512, kernel_size, stride, padding, normalize=False, dropout=0.5)
+        self.down1 = Block(mode='encoder', in_channels=in_channels, out_channels=64, kernel_size=4, stride=2, padding=1,
+                           batch_norm=False, activation='leaky', dropout=0.0)
+        self.down2 = Block(mode='encoder', in_channels=64, out_channels=128, kernel_size=4, stride=2, padding=1,
+                           batch_norm=True, activation='leaky', dropout=0.0)
+        self.down3 = Block(mode='encoder', in_channels=128, out_channels=256, kernel_size=4, stride=2, padding=1,
+                           batch_norm=True, activation='leaky', dropout=0.0)
+        self.down4 = Block(mode='encoder', in_channels=256, out_channels=512, kernel_size=4, stride=2, padding=1,
+                           batch_norm=True, activation='leaky', dropout=0.0)
+        self.down5 = Block(mode='encoder', in_channels=512, out_channels=512, kernel_size=4, stride=2, padding=1,
+                           batch_norm=True, activation='leaky', dropout=0.0)
+        self.down6 = Block(mode='encoder', in_channels=512, out_channels=512, kernel_size=4, stride=2, padding=1,
+                           batch_norm=True, activation='leaky', dropout=0.0)
+        self.down7 = Block(mode='encoder', in_channels=512, out_channels=512, kernel_size=4, stride=2, padding=1,
+                           batch_norm=True, activation='leaky', dropout=0.0)
+        self.down8 = Block(mode='encoder', in_channels=512, out_channels=512, kernel_size=4, stride=2, padding=1,
+                           batch_norm=True, activation='leaky', dropout=0.0)
 
-        self.up1 = UNetUp(512, 512, kernel_size, stride, padding, dropout=0.5)
-        self.up2 = UNetUp(1024, 512, kernel_size, stride, padding, dropout=0.5)
-        self.up3 = UNetUp(1024, 512, kernel_size, stride, padding, dropout=0.5)
-        self.up4 = UNetUp(1024, 512, kernel_size, stride, padding, dropout=0.5)
-        self.up5 = UNetUp(1024, 256, kernel_size, stride, padding)
-        self.up6 = UNetUp(512, 128, kernel_size, stride, padding)
-        self.up7 = UNetUp(256, 64, kernel_size, stride, padding)
-
-        self.final = nn.Sequential(
-            nn.Upsample(scale_factor=2),
-            nn.ZeroPad2d((1, 0, 1, 0)),
-            nn.Conv2d(128, out_channels, kernel_size, padding=1),
-        )
+        self.up1 = Block(mode='decoder', in_channels=512, out_channels=512, kernel_size=4, stride=2, padding=1,
+                         batch_norm=True, activation='relu', dropout=0.5)
+        self.up2 = Block(mode='decoder', in_channels=1024, out_channels=512, kernel_size=4, stride=2, padding=1,
+                         batch_norm=True, activation='relu', dropout=0.5)
+        self.up3 = Block(mode='decoder', in_channels=1024, out_channels=512, kernel_size=4, stride=2, padding=1,
+                         batch_norm=True, activation='relu', dropout=0.5)
+        self.up4 = Block(mode='decoder', in_channels=1024, out_channels=512, kernel_size=4, stride=2, padding=1,
+                         batch_norm=True, activation='relu', dropout=0.0)
+        self.up5 = Block(mode='decoder', in_channels=1024, out_channels=256, kernel_size=4, stride=2, padding=1,
+                         batch_norm=True, activation='relu', dropout=0.0)
+        self.up6 = Block(mode='decoder', in_channels=512, out_channels=128, kernel_size=4, stride=2, padding=1,
+                         batch_norm=True, activation='relu', dropout=0.0)
+        self.up7 = Block(mode='decoder', in_channels=256, out_channels=64, kernel_size=4, stride=2, padding=1,
+                         batch_norm=True, activation='relu', dropout=0.0)
+        self.up8 = Block(mode='decoder', in_channels=128, out_channels=out_channels, kernel_size=4, stride=2, padding=1,
+                         batch_norm=False, activation='', dropout=0.0)
 
     def forward(self, x):
         d1 = self.down1(x)
@@ -72,12 +76,14 @@ class GeneratorModule(nn.Module):
         d6 = self.down6(d5)
         d7 = self.down7(d6)
         d8 = self.down8(d7)
-        u1 = self.up1(d8, d7)
-        u2 = self.up2(u1, d6)
-        u3 = self.up3(u2, d5)
-        u4 = self.up4(u3, d4)
-        u5 = self.up5(u4, d3)
-        u6 = self.up6(u5, d2)
-        u7 = self.up7(u6, d1)
 
-        return (torch.tanh(self.final(u7)) + 1) / 2
+        u1 = self.up1(d8)
+        u2 = self.up2(torch.cat([u1, d7], dim=1))
+        u3 = self.up3(torch.cat([u2, d6], dim=1))
+        u4 = self.up4(torch.cat([u3, d5], dim=1))
+        u5 = self.up5(torch.cat([u4, d4], dim=1))
+        u6 = self.up6(torch.cat([u5, d3], dim=1))
+        u7 = self.up7(torch.cat([u6, d2], dim=1))
+        u8 = self.up8(torch.cat([u7, d1], dim=1))
+
+        return (torch.tanh(u8) + 1) / 2

@@ -18,15 +18,18 @@ if __name__ == '__main__':
 
     # model declaration
     resnet = resnet18()
-    resnet.fc = nn.Linear(resnet.fc.in_features, 125)
-    resnet.to(device)
+    resnet.fc = nn.Linear(resnet.fc.in_features, 250)
 
     criterion = nn.CrossEntropyLoss()
 
-    model_to_load = ''
+    model_to_load = '../../trained_models/resnet18_finetune_TU_Berlin2/best_model.pth'
 
     # data preparation
-    paths = []
+    paths = ['../../datasets/TU_Berlin/all_images',
+             '../../datasets/TU_Berlin/augmented/def_local',
+             '../../datasets/TU_Berlin/augmented/def_local_global',
+             '../../datasets/TU_Berlin/augmented/rm',
+             ]
 
     combined_dataset = ConcatDataset([ImageFolder(root=path) for path in paths])
 
@@ -41,7 +44,8 @@ if __name__ == '__main__':
                              num_workers=num_workers)
 
     if os.path.isfile(f'{model_to_load}'):
-        resnet.load_state_dict(torch.load(f'{model_to_load}', map_location=device))
+        resnet.load_state_dict(torch.load(f'{model_to_load}', weights_only=True))
+        resnet.to(device)
 
         test_loss, test_accuracy = validate_model(resnet, test_loader, criterion, device)
 

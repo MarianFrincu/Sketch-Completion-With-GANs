@@ -1,10 +1,11 @@
 import os
 import time
-
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.models import resnet18
 from torchvision.transforms import transforms
 from tqdm import tqdm
@@ -14,13 +15,14 @@ from models.gan.generator import Generator
 from models.gan.modules.criterion import DiscriminatorLoss, GeneratorLoss
 from util.flow_csv_dataset import CsvDataset
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
+from util.image_transforms import detect_and_crop_centered_batch
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_workers = 10
 
     # model initialization
-    generator = Generator(3, 3)
+    generator = Generator(in_channels=3, out_channels=3)
     discriminator = Discriminator()
     classifier = resnet18()
     classifier.fc = nn.Linear(classifier.fc.in_features, 125)
@@ -60,15 +62,23 @@ if __name__ == '__main__':
                       num_workers=num_workers)
 
     # load classifier model
-    classifier_dir = os.path.abspath(os.path.join(current_dir, "../../models/classifier/resnet18/trained_models/resnet18_1e-4_finetune_sketchy/best_model.pth"))
+    classifier_dir = os.path.abspath(os.path.join(current_dir, "../../trained_models/resnet18_finetune_Sketchy3/best_model.pth"))
     if not os.path.isfile(f'{classifier_dir}'):
         raise FileNotFoundError(f'{classifier_dir} is not found.')
 
-    classifier.load_state_dict(torch.load(f'{classifier_dir}'))
+    classifier.load_state_dict(torch.load(f'{classifier_dir}', weights_only=True))
 
     generator.train()
     discriminator.train()
     classifier.eval()
+
+    gen_best_loss = np.inf
+    disc_best_loss = np.inf
+
+    model_dir = os.path.abspath(os.path.join(current_dir, '../../trained_models/GAN'))
+
+    gan_writer = SummaryWriter(f'{model_dir}/logs/train')
+
     for epoch in range(num_epochs):
         print(f'{FONT_COLOR}\nEpoch {epoch + 1}/{num_epochs}')
         time.sleep(0.1)
@@ -80,20 +90,24 @@ if __name__ == '__main__':
             corrupted, original, labels = corrupted.to(device), original.to(device), labels.to(device)
 
             generated = generator(corrupted)
-            fake_pred = discriminator(corrupted, nn.functional.interpolate(generated, size=128))
+
+            original_crop = detect_and_crop_centered_batch(original, corrupted, original)
+            generated_crop = detect_and_crop_centered_batch(original, corrupted, generated)
+
+            fake_pred = discriminator(corrupted, generated_crop)
 
             with torch.no_grad():
                 # preprocess generator output data and do inference on classifier model
-                classifier_input = nn.functional.interpolate(generated.detach(), size=128)
+                classifier_input = nn.functional.interpolate(generated.detach(), size=224)
 
                 predicted_labels = classifier(classifier_input)
                 classifier_loss = classifier_criterion(predicted_labels, labels)
 
             gen_loss = gen_criterion(original, generated, fake_pred, classifier_loss)
 
-            fake_pred = discriminator(corrupted, nn.functional.interpolate(generated.detach(), size=128))
-            real_pred = discriminator(corrupted, nn.functional.interpolate(original, size=128))
-            disc_loss = disc_criterion(fake_pred, real_pred)
+            fake_pred = discriminator(corrupted, generated_crop.detach())
+            real_pred = discriminator(corrupted, original_crop)
+            disc_loss = disc_criterion(real_pred, fake_pred)
 
             gen_optim.zero_grad()
             gen_loss.backward()
@@ -108,5 +122,21 @@ if __name__ == '__main__':
 
         print(f'{FONT_COLOR}Generator loss: {gen_epoch_loss / len(data):.3f}')
         print(f'{FONT_COLOR}Discriminator loss: {disc_epoch_loss / len(data):.3f}')
+
+        gan_writer.add_scalar('Generator Loss', gen_epoch_loss / len(data), epoch)
+        gan_writer.add_scalar('Discriminator Loss', disc_epoch_loss / len(data), epoch)
+        gan_writer.flush()
+
+        if gen_epoch_loss > gen_best_loss:
+            gen_best_loss = gen_epoch_loss
+            torch.save(generator.state_dict(), f'{model_dir}/best_generator.pth')
+            with open(f'{model_dir}/best_gen_epoch.txt', 'w') as f:
+                f.write(f'Best model epoch: {epoch}')
+
+        if disc_epoch_loss > disc_best_loss:
+            disc_best_loss = disc_epoch_loss
+            torch.save(discriminator.state_dict(), f'{model_dir}/best_discriminator.pth')
+            with open(f'{model_dir}/best_disc_epoch.txt', 'w') as f:
+                f.write(f'Best model epoch: {epoch}')
 
     print(f'{RESET_COLOR}')

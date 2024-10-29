@@ -17,9 +17,8 @@ class Discriminator(nn.Module):
     def forward(self, x, y):
         x = self.global_discriminator(x)
         y = self.local_discriminator(y)
-        y_x_concat = torch.cat([y, x], dim=1)
 
-        y = self.fully_connected(y_x_concat)
-        y = self.activation(y)
+        z = self.fully_connected(torch.cat([y, x], dim=1))
+        z = self.activation(z)
 
-        return (torch.tanh(y) + 1) / 2
+        return (torch.tanh(z) + 1) / 2

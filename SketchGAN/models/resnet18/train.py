@@ -13,7 +13,9 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    with open(os.path.abspath('config.json'), 'r') as file:
+    current_dir = os.path.abspath(os.path.dirname(__file__))
+
+    with open(os.path.join(current_dir, 'config.json'), 'r') as file:
         loaded_json = json.load(file)
 
     config = loaded_json['config']
@@ -29,10 +31,10 @@ if __name__ == '__main__':
     num_classes = config['num_classes']
     freeze = config['freeze']
 
-    data_paths = [os.path.abspath(f'../../{path}') for path in data]
+    data_paths = [os.path.join(current_dir, f'../../{path}') for path in data]
 
     model_dir = config['model_dir']
-    model_dir = os.path.abspath(f'../../{model_dir}')
+    model_dir = os.path.join(current_dir, f'../../{model_dir}')
 
     # model declaration
     resnet = resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT)
@@ -45,9 +47,10 @@ if __name__ == '__main__':
         param.requires_grad = True
 
     if config['continue_train']:
-        model_to_load = os.path.join(model_dir, config['model_to_load'])
+        model_to_load = config['model_to_load']
+        model_to_load = os.path.join(current_dir, f'../../{model_to_load}')
         if os.path.isfile(model_to_load):
-            resnet.load_state_dict(model_to_load)
+            resnet.load_state_dict(torch.load(model_to_load, weights_only=True))
 
     resnet.to(device)
 
@@ -68,7 +71,7 @@ if __name__ == '__main__':
     with open(f'{model_dir}/config.json', 'w') as file:
         json.dump(loaded_json, file, indent=4)
 
-    total_epochs = sum(epochs)
+    total_epochs = current_epoch - 1 + sum(epochs)
 
     for num_epochs, learning_rate in zip(epochs, learning_rates):
 
