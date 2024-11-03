@@ -16,7 +16,7 @@ def random_shift(image, max_shift=32):
     return functional.affine(image, angle=0, translate=[horizontal_shift, vertical_shift], scale=1, shear=[0, 0], fill=[255])
 
 
-def detect_and_crop_centered_batch(original, corrupted, generated):
+def crop_detected_region(original, corrupted, image_to_crop):
     batch_size, channels, height, width = original.size()
 
     generated_regions = []
@@ -49,7 +49,7 @@ def detect_and_crop_centered_batch(original, corrupted, generated):
         if end_y - start_y < 128:
             start_y = max(end_y - 128, 0)
 
-        generated_region = generated[i][:, start_y:end_y, start_x:end_x]
+        generated_region = image_to_crop[i][:, start_y:end_y, start_x:end_x]
 
         generated_regions.append(generated_region)
 

@@ -15,7 +15,17 @@ from models.gan.generator import Generator
 from models.gan.modules.criterion import DiscriminatorLoss, GeneratorLoss
 from util.flow_csv_dataset import CsvDataset
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
-from util.image_transforms import detect_and_crop_centered_batch
+from util.image_transforms import crop_detected_region
+
+from torchvision.transforms import ToPILImage
+
+
+def save_img(tensor, path):
+    to_pil = ToPILImage()
+    image = to_pil(tensor)
+
+    image.save(path)
+
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,15 +44,16 @@ if __name__ == '__main__':
     # train configuration
     batch_size = 16
     num_epochs = 100
-    lr = 1e-3
+    lr_gan = 1e-4
+    lr_disc = 1e-4
     lambda1 = 100
     lambda2 = 0.5
     gen_criterion = GeneratorLoss(lambda1=lambda1, lambda2=lambda2)
     disc_criterion = DiscriminatorLoss()
     classifier_criterion = nn.CrossEntropyLoss()
 
-    gen_optim = optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
-    disc_optim = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
+    gen_optim = optim.Adam(generator.parameters(), lr=lr_gan)
+    disc_optim = optim.Adam(discriminator.parameters(), lr=lr_disc)
 
     current_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -52,7 +63,6 @@ if __name__ == '__main__':
     original_dir = os.path.abspath(os.path.join(current_dir, '../../datasets/Sketchy/original/all_images'))
 
     transform = transforms.Compose([
-        # add other augmentation techniques if necessary
         transforms.ToTensor()
     ])
 
@@ -62,7 +72,8 @@ if __name__ == '__main__':
                       num_workers=num_workers)
 
     # load classifier model
-    classifier_dir = os.path.abspath(os.path.join(current_dir, "../../trained_models/resnet18_finetune_Sketchy3/best_model.pth"))
+    classifier_dir = os.path.abspath(
+        os.path.join(current_dir, "../../trained_models/resnet18_finetune_Sketchy3/best_model.pth"))
     if not os.path.isfile(f'{classifier_dir}'):
         raise FileNotFoundError(f'{classifier_dir} is not found.')
 
@@ -86,54 +97,64 @@ if __name__ == '__main__':
         gen_epoch_loss = 0.0
         disc_epoch_loss = 0.0
 
-        for (corrupted, original, labels) in tqdm(data, desc='Train', bar_format=BAR_FORMAT):
-            corrupted, original, labels = corrupted.to(device), original.to(device), labels.to(device)
+        with tqdm(data, desc='Train', bar_format=BAR_FORMAT) as tqdm_bar:
+            for i, batch in enumerate(tqdm_bar):
+                corrupted, original, labels = batch
+                corrupted, original, labels = corrupted.to(device), original.to(device), labels.to(device)
 
-            generated = generator(corrupted)
+                generated = generator(corrupted)
+                original_crop = crop_detected_region(original, corrupted, original)
+                generated_crop = crop_detected_region(original, corrupted, generated)
 
-            original_crop = detect_and_crop_centered_batch(original, corrupted, original)
-            generated_crop = detect_and_crop_centered_batch(original, corrupted, generated)
+                save_img(generated[0], f'{model_dir}/generated.png')
+                save_img(original_crop[0], f'{model_dir}/original_crop.png')
+                save_img(generated_crop[0], f'{model_dir}/generated_crop.png')
+                save_img(original[0], f'{model_dir}/original.png')
+                save_img(corrupted[0], f'{model_dir}/corrupted.png')
 
-            fake_pred = discriminator(corrupted, generated_crop)
-
-            with torch.no_grad():
-                # preprocess generator output data and do inference on classifier model
-                classifier_input = nn.functional.interpolate(generated.detach(), size=224)
-
-                predicted_labels = classifier(classifier_input)
+                predicted_labels = classifier(nn.functional.interpolate(generated, size=224))
                 classifier_loss = classifier_criterion(predicted_labels, labels)
 
-            gen_loss = gen_criterion(original, generated, fake_pred, classifier_loss)
+                fake_pred = discriminator(corrupted, generated_crop)
+                gen_loss = gen_criterion(original, generated, fake_pred, classifier_loss)
 
-            fake_pred = discriminator(corrupted, generated_crop.detach())
-            real_pred = discriminator(corrupted, original_crop)
-            disc_loss = disc_criterion(real_pred, fake_pred)
+                fake_pred = discriminator(corrupted, generated_crop.detach())
+                real_pred = discriminator(corrupted, original_crop)
+                disc_loss = disc_criterion(real_pred, fake_pred)
 
-            gen_optim.zero_grad()
-            gen_loss.backward()
-            gen_optim.step()
+                gen_optim.zero_grad()
+                gen_loss.backward()
+                gen_optim.step()
 
-            disc_optim.zero_grad()
-            disc_loss.backward()
-            disc_optim.step()
+                disc_optim.zero_grad()
+                disc_loss.backward()
+                disc_optim.step()
 
-            gen_epoch_loss += gen_loss.item() * labels.size(0)
-            disc_epoch_loss += disc_loss.item() * labels.size(0)
+                gen_epoch_loss += gen_loss.item() * labels.size(0)
+                disc_epoch_loss += disc_loss.item() * labels.size(0)
 
-        print(f'{FONT_COLOR}Generator loss: {gen_epoch_loss / len(data):.3f}')
-        print(f'{FONT_COLOR}Discriminator loss: {disc_epoch_loss / len(data):.3f}')
+                tqdm_bar.set_postfix({
+                    f'{FONT_COLOR}Generator loss': f'{gen_loss.item():.3f}',
+                    f'{FONT_COLOR}Discriminator loss': f'{disc_loss.item():.3f}'
+                })
 
-        gan_writer.add_scalar('Generator Loss', gen_epoch_loss / len(data), epoch)
-        gan_writer.add_scalar('Discriminator Loss', disc_epoch_loss / len(data), epoch)
+        gen_epoch_loss /= len(data.dataset)
+        disc_epoch_loss /= len(data.dataset)
+
+        print(f'{FONT_COLOR}Generator epoch loss: {gen_epoch_loss:.3f}')
+        print(f'{FONT_COLOR}Discriminator epoch loss: {disc_epoch_loss:.3f}')
+
+        gan_writer.add_scalar('Generator Loss', gen_epoch_loss, epoch)
+        gan_writer.add_scalar('Discriminator Loss', disc_epoch_loss, epoch)
         gan_writer.flush()
 
-        if gen_epoch_loss > gen_best_loss:
+        if gen_epoch_loss < gen_best_loss:
             gen_best_loss = gen_epoch_loss
             torch.save(generator.state_dict(), f'{model_dir}/best_generator.pth')
             with open(f'{model_dir}/best_gen_epoch.txt', 'w') as f:
                 f.write(f'Best model epoch: {epoch}')
 
-        if disc_epoch_loss > disc_best_loss:
+        if disc_epoch_loss < disc_best_loss:
             disc_best_loss = disc_epoch_loss
             torch.save(discriminator.state_dict(), f'{model_dir}/best_discriminator.pth')
             with open(f'{model_dir}/best_disc_epoch.txt', 'w') as f:

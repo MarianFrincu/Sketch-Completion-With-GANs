@@ -12,8 +12,9 @@ class GeneratorLoss(nn.Module):
 
     def forward(self, original, generated, fake_pred, classifier_loss):
         fake_target = torch.ones_like(fake_pred)
-        loss = (self.bce(fake_pred, fake_target) + self.lambda1 * self.l1(original, generated)
-                + self.lambda2 * classifier_loss)
+        bce = self.bce(fake_pred, fake_target)
+        l1 = self.l1(original, generated)
+        loss = (bce + self.lambda1 * l1 + self.lambda2 * classifier_loss)
         return loss
 
 
