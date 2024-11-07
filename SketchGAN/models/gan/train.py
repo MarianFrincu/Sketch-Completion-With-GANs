@@ -44,16 +44,16 @@ if __name__ == '__main__':
     # train configuration
     batch_size = 16
     num_epochs = 100
-    lr_gan = 1e-4
-    lr_disc = 1e-4
+    lr_gen = 1e-4
+    lr_disc = 2e-4
     lambda1 = 100
     lambda2 = 0.5
     gen_criterion = GeneratorLoss(lambda1=lambda1, lambda2=lambda2)
     disc_criterion = DiscriminatorLoss()
     classifier_criterion = nn.CrossEntropyLoss()
 
-    gen_optim = optim.Adam(generator.parameters(), lr=lr_gan)
-    disc_optim = optim.Adam(discriminator.parameters(), lr=lr_disc)
+    gen_optim = optim.Adam(generator.parameters(), lr=lr_gen, betas=(0.5, 0.999))
+    disc_optim = optim.Adam(discriminator.parameters(), lr=lr_disc, betas=(0.5, 0.999))
 
     current_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -84,7 +84,6 @@ if __name__ == '__main__':
     classifier.eval()
 
     gen_best_loss = np.inf
-    disc_best_loss = np.inf
 
     model_dir = os.path.abspath(os.path.join(current_dir, '../../trained_models/GAN'))
 
@@ -112,23 +111,23 @@ if __name__ == '__main__':
                 save_img(original[0], f'{model_dir}/original.png')
                 save_img(corrupted[0], f'{model_dir}/corrupted.png')
 
+                disc_optim.zero_grad()
+                fake_pred = discriminator(corrupted, generated_crop.detach())
+                real_pred = discriminator(corrupted, original_crop)
+                disc_loss = disc_criterion(real_pred, fake_pred)
+
+                disc_loss.backward()
+                disc_optim.step()
+
+                gen_optim.zero_grad()
                 predicted_labels = classifier(nn.functional.interpolate(generated, size=224))
                 classifier_loss = classifier_criterion(predicted_labels, labels)
 
                 fake_pred = discriminator(corrupted, generated_crop)
                 gen_loss = gen_criterion(original, generated, fake_pred, classifier_loss)
 
-                fake_pred = discriminator(corrupted, generated_crop.detach())
-                real_pred = discriminator(corrupted, original_crop)
-                disc_loss = disc_criterion(real_pred, fake_pred)
-
-                gen_optim.zero_grad()
                 gen_loss.backward()
                 gen_optim.step()
-
-                disc_optim.zero_grad()
-                disc_loss.backward()
-                disc_optim.step()
 
                 gen_epoch_loss += gen_loss.item() * labels.size(0)
                 disc_epoch_loss += disc_loss.item() * labels.size(0)
@@ -148,16 +147,16 @@ if __name__ == '__main__':
         gan_writer.add_scalar('Discriminator Loss', disc_epoch_loss, epoch)
         gan_writer.flush()
 
-        if gen_epoch_loss < gen_best_loss:
+        torch.save(generator.state_dict(), f'{model_dir}/last_generator.pth')
+        torch.save(discriminator.state_dict(), f'{model_dir}/last_discriminator.pth')
+        with open(f'{model_dir}/last_epoch.txt', 'w') as f:
+            f.write(f'Last epoch: {epoch + 1}')
+
+        if gen_epoch_loss <= gen_best_loss:
             gen_best_loss = gen_epoch_loss
             torch.save(generator.state_dict(), f'{model_dir}/best_generator.pth')
-            with open(f'{model_dir}/best_gen_epoch.txt', 'w') as f:
-                f.write(f'Best model epoch: {epoch}')
-
-        if disc_epoch_loss < disc_best_loss:
-            disc_best_loss = disc_epoch_loss
             torch.save(discriminator.state_dict(), f'{model_dir}/best_discriminator.pth')
-            with open(f'{model_dir}/best_disc_epoch.txt', 'w') as f:
-                f.write(f'Best model epoch: {epoch}')
+            with open(f'{model_dir}/best_epoch.txt', 'w') as f:
+                f.write(f'Best epoch: {epoch + 1}')
 
     print(f'{RESET_COLOR}')
