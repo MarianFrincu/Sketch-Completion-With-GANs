@@ -12,13 +12,11 @@ class Discriminator(nn.Module):
         self.global_discriminator = GlobalDiscriminator()
         self.local_discriminator = LocalDiscriminator()
         self.fully_connected = nn.Linear(2048, 1)
-        self.activation = nn.ReLU()
 
     def forward(self, x, y):
         x = self.global_discriminator(x)
         y = self.local_discriminator(y)
 
         z = self.fully_connected(torch.cat([y, x], dim=1))
-        z = self.activation(z)
 
         return (torch.tanh(z) + 1) / 2

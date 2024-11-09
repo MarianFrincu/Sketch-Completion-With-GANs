@@ -43,9 +43,9 @@ if __name__ == '__main__':
 
     # train configuration
     batch_size = 16
-    num_epochs = 100
-    lr_gen = 1e-4
-    lr_disc = 2e-4
+    num_epochs = 20
+    lr_gen = 2e-4
+    lr_disc = 1e-4
     lambda1 = 100
     lambda2 = 0.5
     gen_criterion = GeneratorLoss(lambda1=lambda1, lambda2=lambda2)
@@ -105,11 +105,11 @@ if __name__ == '__main__':
                 original_crop = crop_detected_region(original, corrupted, original)
                 generated_crop = crop_detected_region(original, corrupted, generated)
 
-                save_img(generated[0], f'{model_dir}/generated.png')
-                save_img(original_crop[0], f'{model_dir}/original_crop.png')
-                save_img(generated_crop[0], f'{model_dir}/generated_crop.png')
-                save_img(original[0], f'{model_dir}/original.png')
-                save_img(corrupted[0], f'{model_dir}/corrupted.png')
+                save_img(generated[0], f'{model_dir}/epoch_{epoch + 1}/generated.png')
+                save_img(original_crop[0], f'{model_dir}/epoch_{epoch + 1}/original_crop.png')
+                save_img(generated_crop[0], f'{model_dir}/epoch_{epoch + 1}/generated_crop.png')
+                save_img(original[0], f'{model_dir}/epoch_{epoch + 1}/original.png')
+                save_img(corrupted[0], f'{model_dir}/epoch_{epoch + 1}/corrupted.png')
 
                 disc_optim.zero_grad()
                 fake_pred = discriminator(corrupted, generated_crop.detach())

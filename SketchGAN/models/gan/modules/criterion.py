@@ -21,12 +21,13 @@ class GeneratorLoss(nn.Module):
 class DiscriminatorLoss(nn.Module):
     def __init__(self, ):
         super().__init__()
-        self.bce = nn.BCELoss()
+        self.bce1 = nn.BCELoss()
+        self.bce2 = nn.BCELoss()
 
     def forward(self, real_pred, fake_pred):
         real_target = torch.ones_like(real_pred)
         fake_target = torch.zeros_like(fake_pred)
-        real_target_loss = self.bce(real_pred, real_target)
-        fake_target_loss = self.bce(fake_pred, fake_target)
+        real_target_loss = self.bce1(real_pred, real_target)
+        fake_target_loss = self.bce2(fake_pred, fake_target)
         loss = real_target_loss + fake_target_loss
         return loss
