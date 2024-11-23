@@ -1,13 +1,12 @@
 import torch
-import random
 from tqdm import tqdm
 from sklearn.model_selection import KFold
 from torchvision.datasets import ImageFolder
-from torchvision.transforms import transforms, functional
+from torchvision.transforms import transforms
 from torch.utils.data import ConcatDataset, Subset, DataLoader
 
-from util.custom_dataset import CustomDataset
-from util.image_transforms import random_shift
+from util.c_dataset import CDataset
+from util.image_functions import random_shift
 
 
 def prepare_data(batch_size, num_workers, n_splits, paths):
@@ -36,12 +35,12 @@ def prepare_data(batch_size, num_workers, n_splits, paths):
         val_subset = Subset(dataset=combined_dataset, indices=valid_idx)
         break
 
-    train_loader = DataLoader(CustomDataset(train_subset, train_transforms),
+    train_loader = DataLoader(CDataset(train_subset, train_transforms),
                               batch_size=batch_size,
                               shuffle=True,
                               num_workers=num_workers)
 
-    val_loader = DataLoader(CustomDataset(val_subset, val_transforms),
+    val_loader = DataLoader(CDataset(val_subset, val_transforms),
                             batch_size=batch_size,
                             num_workers=num_workers)
 

@@ -1,8 +1,9 @@
-import os
+import json
 import time
 import numpy as np
 import torch
 import torch.nn as nn
+from pathlib import Path
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -13,103 +14,109 @@ from tqdm import tqdm
 from models.gan.discriminator import Discriminator
 from models.gan.generator import Generator
 from models.gan.modules.criterion import DiscriminatorLoss, GeneratorLoss
-from util.flow_csv_dataset import CsvDataset
+from util.dual_image_folder_dataset import DualImageFolderDataset
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
-from util.image_transforms import crop_detected_region
+from util.image_functions import crop_detected_region, save_img
 
-from torchvision.transforms import ToPILImage
+if __name__ == "__main__":
 
-
-def save_img(tensor, path):
-    to_pil = ToPILImage()
-    image = to_pil(tensor)
-
-    image.save(path)
-
-
-if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_workers = 10
 
-    # model initialization
-    generator = Generator(in_channels=3, out_channels=3)
-    discriminator = Discriminator()
+    current_dir = Path(__file__).parent
+
+    with open(Path(current_dir, "config.json"), 'r') as file:
+        loaded_json = json.load(file)
+    config = loaded_json['config']
+    data = loaded_json['data']
+
+    # models initialization
+    models_dir = Path(current_dir, config['models_dir'])
+
+    generator = Generator(in_channels=1, out_channels=1)
+    discriminator = Discriminator(global_shape=[1, 256, 256], local_shape=[1, 128, 128])
     classifier = resnet18()
-    classifier.fc = nn.Linear(classifier.fc.in_features, 125)
+    classifier.fc = nn.Linear(classifier.fc.in_features, out_features=config['classifier_classes'])
 
     generator.to(device)
     discriminator.to(device)
     classifier.to(device)
 
-    # train configuration
-    batch_size = 16
-    num_epochs = 20
-    lr_gen = 2e-4
-    lr_disc = 1e-4
-    lambda1 = 100
-    lambda2 = 0.5
-    gen_criterion = GeneratorLoss(lambda1=lambda1, lambda2=lambda2)
+    # classifier model load
+    classifier.load_state_dict(torch.load(Path(current_dir, config['classifier_to_load']),
+                                          weights_only=True,
+                                          map_location=device
+                                          ))
+
+    # gan models load if continue train
+    current_epoch = 1
+    gen_best_loss = np.inf
+
+    if Path(current_dir, config['gan_to_load']).is_file():
+        print(True)
+
+    if config['continue_train']:
+        checkpoint = torch.load(Path(current_dir, config['gan_to_load']), map_location=device, weights_only=True)
+        generator.load_state_dict(checkpoint['generator_state_dict'])
+        discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+        current_epoch = checkpoint['epoch'] + 1
+        gen_best_loss = checkpoint['gen_loss']
+
+    # losses initialization
+    gen_criterion = GeneratorLoss(lambda1=config['lambda1'], lambda2=config['lambda2'])
     disc_criterion = DiscriminatorLoss()
     classifier_criterion = nn.CrossEntropyLoss()
 
-    gen_optim = optim.Adam(generator.parameters(), lr=lr_gen, betas=(0.5, 0.999))
-    disc_optim = optim.Adam(discriminator.parameters(), lr=lr_disc, betas=(0.5, 0.999))
+    # optimizers initialisation
+    gen_optim = optim.Adam(generator.parameters(), lr=config['generator_learning_rate'], betas=(0.5, 0.999))
+    disc_optim = optim.Adam(discriminator.parameters(), lr=config['discriminator_learning_rate'], betas=(0.5, 0.999))
 
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-
-    # data preparation
-    csv_file_path = os.path.abspath(os.path.join(current_dir, '../../datasets/Sketchy/sketchy_labels.csv'))
-    corrupted_dir = os.path.abspath(os.path.join(current_dir, '../../datasets/Sketchy/corrupted/all_images'))
-    original_dir = os.path.abspath(os.path.join(current_dir, '../../datasets/Sketchy/original/all_images'))
-
-    transform = transforms.Compose([
+    # data transforms initialization
+    gan_transform = transforms.Compose([
+        transforms.Grayscale(),
         transforms.ToTensor()
     ])
 
-    data = DataLoader(dataset=CsvDataset(csv_file_path, corrupted_dir, original_dir, transform),
-                      batch_size=batch_size,
-                      shuffle=True,
-                      num_workers=num_workers)
+    classifier_transform = transforms.Compose([
+        transforms.Lambda(lambda tensor: tensor.repeat(3, 1, 1)),
+        transforms.Resize((224, 224))
+    ])
 
-    # load classifier model
-    classifier_dir = os.path.abspath(
-        os.path.join(current_dir, "../../trained_models/resnet18_finetune_Sketchy3/best_model.pth"))
-    if not os.path.isfile(f'{classifier_dir}'):
-        raise FileNotFoundError(f'{classifier_dir} is not found.')
+    # data loader initialization
+    loader = DataLoader(dataset=DualImageFolderDataset(first_root=Path(current_dir, data['original_dir']),
+                                                       second_root=Path(current_dir, data['corrupted_dir']),
+                                                       transform=gan_transform),
+                        batch_size=config['batch_size'],
+                        shuffle=True,
+                        num_workers=10)
 
-    classifier.load_state_dict(torch.load(f'{classifier_dir}', weights_only=True))
+    # tensorboard initialization
+    gan_writer = SummaryWriter(f"{models_dir}/logs/train")
 
-    generator.train()
-    discriminator.train()
-    classifier.eval()
+    # save json config
+    with open(Path(models_dir, "config.json"), 'w') as file:
+        json.dump(loaded_json, file)
 
-    gen_best_loss = np.inf
+    # epochs initialization
+    total_epochs = current_epoch - 1 + config['num_epochs']
 
-    model_dir = os.path.abspath(os.path.join(current_dir, '../../trained_models/GAN'))
+    counter = 10 - (current_epoch - 1) % 10  # used for saving the model each 10 epochs
 
-    gan_writer = SummaryWriter(f'{model_dir}/logs/train')
-
-    for epoch in range(num_epochs):
-        print(f'{FONT_COLOR}\nEpoch {epoch + 1}/{num_epochs}')
+    for _ in range(config['num_epochs']):
+        print(f"{FONT_COLOR}\nEpoch {current_epoch}/{total_epochs}")
         time.sleep(0.1)
 
         gen_epoch_loss = 0.0
         disc_epoch_loss = 0.0
 
-        with tqdm(data, desc='Train', bar_format=BAR_FORMAT) as tqdm_bar:
-            for i, batch in enumerate(tqdm_bar):
-                corrupted, original, labels = batch
-                corrupted, original, labels = corrupted.to(device), original.to(device), labels.to(device)
+        # Path(models_dir, f"epoch_{current_epoch}").mkdir(parents=True, exist_ok=True)
+
+        with tqdm(loader, desc='Train', bar_format=BAR_FORMAT) as tqdm_loader:
+            for i, (original, corrupted, labels) in enumerate(tqdm_loader):
+                original, corrupted, labels = original.to(device), corrupted.to(device), labels.to(device)
 
                 generated = generator(corrupted)
                 original_crop = crop_detected_region(original, corrupted, original)
                 generated_crop = crop_detected_region(original, corrupted, generated)
-
-                save_img(generated[0], f'{model_dir}/epoch_{epoch + 1}/generated.png')
-                save_img(original_crop[0], f'{model_dir}/epoch_{epoch + 1}/original_crop.png')
-                save_img(generated_crop[0], f'{model_dir}/epoch_{epoch + 1}/generated_crop.png')
-                save_img(original[0], f'{model_dir}/epoch_{epoch + 1}/original.png')
-                save_img(corrupted[0], f'{model_dir}/epoch_{epoch + 1}/corrupted.png')
 
                 disc_optim.zero_grad()
                 fake_pred = discriminator(corrupted, generated_crop.detach())
@@ -120,7 +127,7 @@ if __name__ == '__main__':
                 disc_optim.step()
 
                 gen_optim.zero_grad()
-                predicted_labels = classifier(nn.functional.interpolate(generated, size=224))
+                predicted_labels = classifier(torch.stack([classifier_transform(img) for img in generated.detach()]))
                 classifier_loss = classifier_criterion(predicted_labels, labels)
 
                 fake_pred = discriminator(corrupted, generated_crop)
@@ -132,31 +139,56 @@ if __name__ == '__main__':
                 gen_epoch_loss += gen_loss.item() * labels.size(0)
                 disc_epoch_loss += disc_loss.item() * labels.size(0)
 
-                tqdm_bar.set_postfix({
-                    f'{FONT_COLOR}Generator loss': f'{gen_loss.item():.3f}',
-                    f'{FONT_COLOR}Discriminator loss': f'{disc_loss.item():.3f}'
+                tqdm_loader.set_postfix({
+                    f"{FONT_COLOR}Generator loss": f"{gen_loss.item():.3f}",
+                    f"{FONT_COLOR}Discriminator loss": f"{disc_loss.item():.3f}"
                 })
 
-        gen_epoch_loss /= len(data.dataset)
-        disc_epoch_loss /= len(data.dataset)
+                # save_img(generated[0], f"{models_dir}/epoch_{current_epoch}/generated.png")
+                # save_img(original_crop[0], f"{models_dir}/epoch_{current_epoch}/original_crop.png")
+                # save_img(generated_crop[0], f"{models_dir}/epoch_{current_epoch}/generated_crop.png")
+                # save_img(original[0], f"{models_dir}/epoch_{current_epoch}/original.png")
+                # save_img(corrupted[0], f"{models_dir}/epoch_{current_epoch}/corrupted.png")
 
-        print(f'{FONT_COLOR}Generator epoch loss: {gen_epoch_loss:.3f}')
-        print(f'{FONT_COLOR}Discriminator epoch loss: {disc_epoch_loss:.3f}')
+        gen_epoch_loss /= len(loader.dataset)
+        disc_epoch_loss /= len(loader.dataset)
 
-        gan_writer.add_scalar('Generator Loss', gen_epoch_loss, epoch)
-        gan_writer.add_scalar('Discriminator Loss', disc_epoch_loss, epoch)
+        print(f"{FONT_COLOR}Generator epoch loss: {gen_epoch_loss:.3f}")
+        print(f"{FONT_COLOR}Discriminator epoch loss: {disc_epoch_loss:.3f}")
+
+        gan_writer.add_scalar("Generator Loss", gen_epoch_loss, current_epoch)
+        gan_writer.add_scalar("Discriminator Loss", disc_epoch_loss, current_epoch)
         gan_writer.flush()
 
-        torch.save(generator.state_dict(), f'{model_dir}/last_generator.pth')
-        torch.save(discriminator.state_dict(), f'{model_dir}/last_discriminator.pth')
-        with open(f'{model_dir}/last_epoch.txt', 'w') as f:
-            f.write(f'Last epoch: {epoch + 1}')
+        # saving models
+        counter -= 1
+        if counter == 0:
+            counter = 10
+            torch.save(obj={"generator_state_dict": generator.state_dict(),
+                            "discriminator_state_dict": discriminator.state_dict(),
+                            "epoch": current_epoch,
+                            "gen_loss": gen_epoch_loss,
+                            "disc_loss": disc_epoch_loss,
+                            }, f=f"{models_dir}/epoch_{current_epoch}_gan.pth")
+
+        torch.save(obj={"generator_state_dict": generator.state_dict(),
+                        "discriminator_state_dict": discriminator.state_dict(),
+                        "epoch": current_epoch,
+                        "gen_loss": gen_epoch_loss,
+                        "disc_loss": disc_epoch_loss,
+                        }, f=f"{models_dir}/last_gan.pth")
 
         if gen_epoch_loss <= gen_best_loss:
             gen_best_loss = gen_epoch_loss
-            torch.save(generator.state_dict(), f'{model_dir}/best_generator.pth')
-            torch.save(discriminator.state_dict(), f'{model_dir}/best_discriminator.pth')
-            with open(f'{model_dir}/best_epoch.txt', 'w') as f:
-                f.write(f'Best epoch: {epoch + 1}')
+            torch.save(obj={"generator_state_dict": generator.state_dict(),
+                            "discriminator_state_dict": discriminator.state_dict(),
+                            "epoch": current_epoch,
+                            "gen_loss": gen_epoch_loss,
+                            "disc_loss": disc_epoch_loss,
+                            }, f=f"{models_dir}/best_gan.pth")
 
-    print(f'{RESET_COLOR}')
+        current_epoch += 1
+
+    gan_writer.close()
+
+    print(f"{RESET_COLOR}")

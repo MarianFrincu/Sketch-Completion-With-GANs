@@ -6,7 +6,7 @@ from torchvision.datasets import ImageFolder
 from torchvision.models import resnet18
 from torch.utils.data import DataLoader, ConcatDataset
 
-from util.custom_dataset import CustomDataset
+from util.c_dataset import CDataset
 from models.resnet18.model_funcs import validate_model
 
 if __name__ == '__main__':
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         transforms.ToTensor()
     ])
 
-    test_loader = DataLoader(CustomDataset(combined_dataset, test_transforms),
+    test_loader = DataLoader(CDataset(combined_dataset, test_transforms),
                              batch_size=batch_size,
                              shuffle=True,
                              num_workers=num_workers)

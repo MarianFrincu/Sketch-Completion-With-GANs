@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 
 
-class CustomDataset(Dataset):
+class CDataset(Dataset):
     def __init__(self, dataset, transform=None, target_transform=None):
         self.dataset = dataset
         self.transform = transform

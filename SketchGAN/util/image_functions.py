@@ -2,11 +2,13 @@ import torch
 import random
 import torchvision.transforms.functional as functional
 import torchvision.transforms as transforms
+from torchvision.transforms import ToPILImage
 
 
-def invert(tensor):
-    tensor = 1. - tensor
-    return tensor
+def save_img(tensor, path):
+    to_pil = ToPILImage()
+    image = to_pil(tensor)
+    image.save(path)
 
 
 def random_shift(image, max_shift=32):
