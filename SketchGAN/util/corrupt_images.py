@@ -52,8 +52,8 @@ def create_corrupted_dataset(original_dir, corrupted_dir, boundaries):
 
 
 if __name__ == '__main__':
-    original_dir = '../datasets/Sketchy/original/all_images'
-    corrupted_dir = '../datasets/Sketchy/corrupted/all_images'
+    original_dir = ''
+    corrupted_dir = ''
     corruption_percent = (10, 40)
 
     create_corrupted_dataset(original_dir, corrupted_dir, corruption_percent)

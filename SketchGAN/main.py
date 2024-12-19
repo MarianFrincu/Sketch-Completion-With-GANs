@@ -1,55 +1,55 @@
-import torch
+from PIL import Image
+import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
-import numpy as np
-import cv2
-from torchvision.transforms import transforms
+import torch
 
 from models.gan.generator import Generator
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-gen = Generator(in_channels=3, out_channels=3)
+gen = Generator(in_channels=1, out_channels=1)
 
-gen.load_state_dict(torch.load('trained_models/GAN_alternate_discriminator/last_generator.pth'))
+gan_save = torch.load('trained_models/GrayscaleGAN/epoch_40_gan.pth', weights_only=True, map_location=device)
+
+gen.load_state_dict(gan_save['generator_state_dict'])
 
 gen.to(device)
 
-img = 'chair/n02738535_419-1.png'
+img = 'armor/n03000247_33355-6.png'
 
 corrupted_img_path = 'datasets/Sketchy/corrupted/all_images/' + img
 original_img_path = 'datasets/Sketchy/original/all_images/' + img
 
-corrupted = cv2.imread(corrupted_img_path)
-corrupted = cv2.resize(corrupted, (256, 256))
-corrupted = cv2.cvtColor(corrupted, cv2.COLOR_BGR2RGB)
+original = Image.open(original_img_path).convert('RGB')
+corrupted = Image.open(corrupted_img_path).convert('RGB')
 
-original = cv2.imread(original_img_path)
-original = cv2.resize(original, (256, 256))
-original = cv2.cvtColor(original, cv2.COLOR_BGR2RGB)
+gan_transform = transforms.Compose([
+        transforms.Grayscale(),
+        transforms.ToTensor()
+    ])
 
-# Convert the image to PyTorch tensor and add batch dimension
-tensor_image = transforms.ToTensor()(corrupted)
-tensor_image = tensor_image.unsqueeze(dim=0)
-tensor_image = tensor_image.to(device)
+tensor_image = gan_transform(corrupted).unsqueeze(0).to(device)
 
+gen.eval()
 with torch.no_grad():
-    gen.eval()
     generated_img = gen(tensor_image)
 
-np_img = generated_img.squeeze(0).cpu().numpy()
 
-np_img = np.transpose(np_img, (1, 2, 0))
-np_img = np.clip(np_img, 0, 1)
+np_img = generated_img.squeeze(0).repeat(3, 1, 1).permute(1, 2, 0).cpu().numpy()
 
 plt.figure(figsize=(10, 5))
 
-plt.subplot(1, 2, 1)
+plt.subplot(1, 3, 1)
 plt.imshow(original)
 plt.title('Original Image')
 plt.axis('off')
 
-# Display generated image
-plt.subplot(1, 2, 2)
+plt.subplot(1, 3, 2)
+plt.imshow(corrupted)
+plt.title('Corrupted Image')
+plt.axis('off')
+
+plt.subplot(1, 3, 3)
 plt.imshow(np_img)
 plt.title('Generated Image')
 plt.axis('off')

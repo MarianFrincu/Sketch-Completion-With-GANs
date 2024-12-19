@@ -5,12 +5,6 @@ import torchvision.transforms as transforms
 from torchvision.transforms import ToPILImage
 
 
-def save_img(tensor, path):
-    to_pil = ToPILImage()
-    image = to_pil(tensor)
-    image.save(path)
-
-
 def random_shift(image, max_shift=32):
     horizontal_shift = random.randint(-max_shift, max_shift)
     vertical_shift = random.randint(-max_shift, max_shift)
