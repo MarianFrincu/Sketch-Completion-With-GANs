@@ -1,7 +1,7 @@
 {
     "config": {
         "epochs": [
-            20
+            100
         ],
         "learning_rates": [
             1e-4
@@ -13,11 +13,11 @@
         "num_folds": 3,
         "num_classes": 125,
         "freeze": false,
-        "model_dir": "../../trained_models/resnet18_finetune_Sketchy4",
+        "model_dir": "../../trained_models/resnet18_finetune_Sketchy_Cleared",
         "continue_train": false,
         "model_to_load": ""
     },
     "data": [
-        "../../datasets/Sketchy/original/all_images"
+        "../../datasets/Sketchy/original"
     ]
 }

@@ -67,11 +67,6 @@ if __name__ == "__main__":
         transforms.ToTensor()
     ])
 
-    classifier_transform = transforms.Compose([
-        transforms.Lambda(lambda tensor: tensor.repeat(3, 1, 1)),
-        transforms.Resize((224, 224))
-    ])
-
     # data loader initialization
     loader = DataLoader(dataset=DualImageFolderDataset(first_root=Path(current_dir, data['original_dir']),
                                                        second_root=Path(current_dir, data['corrupted_dir']),
@@ -166,15 +161,6 @@ if __name__ == "__main__":
                         "gen_loss": gen_epoch_loss,
                         "critic_loss": critic_epoch_loss,
                         }, f=f"{models_dir}/last_gan.pth")
-
-        if gen_epoch_loss <= gen_best_loss:
-            gen_best_loss = gen_epoch_loss
-            torch.save(obj={"generator_state_dict": generator.state_dict(),
-                            "critic_state_dict": critic.state_dict(),
-                            "epoch": current_epoch,
-                            "gen_loss": gen_epoch_loss,
-                            "critic_loss": critic_epoch_loss,
-                            }, f=f"{models_dir}/best_gan.pth")
 
         current_epoch += 1
 

@@ -74,6 +74,7 @@ if __name__ == "__main__":
 
     # data transforms initialization
     gan_transform = transforms.Compose([
+        transforms.Resize((256, 256)),
         transforms.Grayscale(),
         transforms.ToTensor()
     ])
@@ -153,14 +154,15 @@ if __name__ == "__main__":
         gan_writer.add_scalar("Generator Loss", gen_epoch_loss, current_epoch)
         gan_writer.add_scalar("Discriminator Loss", disc_epoch_loss, current_epoch)
 
-        generated = generator(corrupted)
-        gan_writer.add_image(tag="{=} Generated <==> Corrupted <==> Original {=}",
-                             img_tensor=torchvision.utils.make_grid(
-                                 torch.stack([generated[0].detach(), corrupted[0], original[0]]).cpu(),
-                                 nrow=3,
-                                 normalize=True),
-                             global_step=current_epoch
-                             )
+        with torch.no_grad():
+            generated = generator(corrupted)
+            gan_writer.add_image(tag="{=} Generated <==> Corrupted <==> Original {=}",
+                                 img_tensor=torchvision.utils.make_grid(
+                                     torch.stack([generated[0].detach(), corrupted[0], original[0]]).cpu(),
+                                     nrow=3,
+                                     normalize=True),
+                                 global_step=current_epoch
+                                 )
         gan_writer.flush()
 
         # saving models

@@ -1,17 +1,17 @@
 {
     "config": {
-        "num_epochs": 100,
+        "num_epochs": 200,
         "generator_learning_rate": 1e-4,
         "critic_learning_rate": 1e-4,
         "n_critic" : 5,
         "batch_size": 16,
         "lambda_gp" : 10,
-        "models_dir": "../../trained_models/GrayscaleWGANTEST2",
+        "models_dir": "../../trained_models/GrayscaleWGAN",
         "continue_train": false,
         "gan_to_load": ""
     },
     "data": {
-        "original_dir": "../../datasets/Sketchy/original/all_images",
-        "corrupted_dir": "../../datasets/Sketchy/corrupted/all_images"
+        "original_dir": "../../datasets/Sketchy/original",
+        "corrupted_dir": "../../datasets/Sketchy/corrupted"
     }
 }

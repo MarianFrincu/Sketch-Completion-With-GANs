@@ -9,7 +9,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 gen = Generator(in_channels=1, out_channels=1)
 
-gan_save = torch.load('trained_models/GrayscaleGAN/epoch_40_gan.pth', weights_only=True, map_location=device)
+gan_save = torch.load('trained_models/epoch_100_gan.pth', weights_only=True, map_location=device)
 
 gen.load_state_dict(gan_save['generator_state_dict'])
 
