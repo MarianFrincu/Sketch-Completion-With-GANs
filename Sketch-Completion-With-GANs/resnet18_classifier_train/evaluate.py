@@ -7,7 +7,7 @@ from torchvision.models import resnet18
 from torch.utils.data import DataLoader, ConcatDataset
 
 from util.c_dataset import CDataset
-from models.resnet18.model_funcs import validate_model
+from resnet18_classifier_train.model_funcs import validate_model
 
 if __name__ == '__main__':
 
@@ -16,20 +16,14 @@ if __name__ == '__main__':
     num_workers = 10
     batch_size = 135
 
-    # model declaration
     resnet = resnet18()
-    resnet.fc = nn.Linear(resnet.fc.in_features, 250)
+    resnet.fc = nn.Linear(resnet.fc.in_features, 125)
 
     criterion = nn.CrossEntropyLoss()
 
-    model_to_load = '../../trained_models/resnet18_finetune_TU_Berlin2/best_model.pth'
+    model_to_load = "../trained_models/resnet18_finetune_Sketchy/best_model.pth"
 
-    # data preparation
-    paths = ['../../datasets/TU_Berlin/all_images',
-             '../../datasets/TU_Berlin/augmented/def_local',
-             '../../datasets/TU_Berlin/augmented/def_local_global',
-             '../../datasets/TU_Berlin/augmented/rm',
-             ]
+    paths = ["../datasets/Sketchy_split/test"]
 
     combined_dataset = ConcatDataset([ImageFolder(root=path) for path in paths])
 

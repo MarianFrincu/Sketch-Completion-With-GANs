@@ -1,5 +1,3 @@
-
-# ansi console consts
 FONT_COLOR = '\033[38;2;207;142;109m'
 LOADING_BAD_COLOR = '\033[38;2;36;165;162m'
 RESET_COLOR = '\033[0m'

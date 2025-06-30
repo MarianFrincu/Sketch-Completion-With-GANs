@@ -6,7 +6,7 @@ class GlobalDiscriminator(nn.Module):
         super().__init__()
 
         if input_shape is None:
-            input_shape = [3, 256, 256]  # [channels, height, width]
+            input_shape = [1, 256, 256]  # [channels, height, width]
 
         self.model = nn.Sequential(
             nn.Conv2d(in_channels=input_shape[0], out_channels=64, kernel_size=5, stride=2, padding=2),
@@ -28,7 +28,6 @@ class GlobalDiscriminator(nn.Module):
             nn.BatchNorm2d(512),
             nn.ReLU(),
             nn.Flatten(),
-            # the width and height is divided by 2**6 because before are applied 6 convolutions with stride 2
             nn.Linear(512 * (input_shape[1] // (2 ** 6)) * (input_shape[2] // (2 ** 6)), out_features=1024),
             nn.ReLU()
         )

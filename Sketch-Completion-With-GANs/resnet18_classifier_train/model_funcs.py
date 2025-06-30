@@ -58,20 +58,16 @@ def train_model(model, loader, criterion, optimizer, device):
         optimizer.zero_grad()
         outputs = model(inputs)
 
-        # batch loss
         loss = criterion(outputs, labels)
         total_loss += loss.item() * labels.size(0)
 
-        # calculate and update gradients
         loss.backward()
         optimizer.step()
 
         _, predicted = torch.max(outputs.data, dim=1)
         total_accuracy += (predicted == labels).sum().item()
 
-    # entire epoch loss
     total_loss /= len(loader.dataset)
-    # entire epoch accuracy
     total_accuracy /= len(loader.dataset)
     return total_loss, total_accuracy
 
@@ -93,8 +89,6 @@ def validate_model(model, loader, criterion, device):
             _, predicted = torch.max(outputs.data, dim=1)
             total_accuracy += (predicted == labels).sum().item()
 
-    # entire epoch loss
     total_loss /= len(loader.dataset)
-    # entire epoch accuracy
     total_accuracy /= len(loader.dataset)
     return total_loss, total_accuracy

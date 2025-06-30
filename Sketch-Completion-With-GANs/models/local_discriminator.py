@@ -6,7 +6,7 @@ class LocalDiscriminator(nn.Module):
         super().__init__()
 
         if input_shape is None:
-            input_shape = [3, 128, 128]  # [channels, height, width]
+            input_shape = [1, 128, 128]
 
         self.model = nn.Sequential(
             nn.Conv2d(in_channels=input_shape[0], out_channels=64, kernel_size=5, stride=2, padding=2),
@@ -25,7 +25,6 @@ class LocalDiscriminator(nn.Module):
             nn.BatchNorm2d(512),
             nn.ReLU(),
             nn.Flatten(),
-            # the width and height is divided by 2**5 because before are applied 5 convolutions with stride 2
             nn.Linear(512 * (input_shape[1] // (2 ** 5)) * (input_shape[2] // (2 ** 5)), out_features=1024),
             nn.ReLU()
         )

@@ -13,11 +13,11 @@
         "num_folds": 3,
         "num_classes": 125,
         "freeze": false,
-        "model_dir": "../../trained_models/resnet18_finetune_Sketchy_Cleared",
+        "model_dir": "../trained_models/resnet18_finetune_Sketchy",
         "continue_train": false,
         "model_to_load": ""
     },
     "data": [
-        "../../datasets/Sketchy/original"
+        "../datasets/Sketchy_split/train"
     ]
 }

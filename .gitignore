@@ -185,7 +185,8 @@ fabric.properties
 .idea
 
 # Datasets
-Project/datasets
+Sketch-Completion-With-GANs/datasets
 
 # Trained models
-Project/trained_models
+Sketch-Completion-With-GANs/trained_models
+

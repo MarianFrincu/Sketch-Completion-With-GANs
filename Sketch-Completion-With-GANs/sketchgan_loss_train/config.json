@@ -1,0 +1,19 @@
+{
+    "config": {
+        "num_epochs": 200,
+        "generator_learning_rate": 2e-4,
+        "discriminator_learning_rate": 2e-4,
+        "batch_size": 16,
+        "lambda1": 100,
+        "lambda2": 0.5,
+        "classifier_classes": 125,
+        "models_dir": "../trained_models/GrayscaleSketchGAN_11",
+        "classifier_to_load": "../trained_models/resnet18_finetune_Sketchy/best_model.pth",
+        "continue_train": false,
+        "gan_to_load": ""
+    },
+    "data": {
+        "original_dir": "../datasets/Sketchy_split/train/original",
+        "corrupted_dir": "../datasets/Sketchy_split/train/corrupted"
+    }
+}

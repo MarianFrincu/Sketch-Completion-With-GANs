@@ -2,12 +2,11 @@ import json
 import time
 import numpy as np
 import torch
-import torchvision
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import resnet18
+from torchvision.models import resnet18, ResNet18_Weights
 
-from models.resnet18.model_funcs import train_model, validate_model, prepare_data
+from resnet18_classifier_train.model_funcs import train_model, validate_model, prepare_data
 
 if __name__ == '__main__':
 
@@ -20,10 +19,9 @@ if __name__ == '__main__':
     config = loaded_json['config']
     data = loaded_json['data']
 
-    # model initialization
     model_dir = Path(current_dir, config['model_dir'])
 
-    resnet = resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT)
+    resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
     resnet.fc = torch.nn.Linear(resnet.fc.in_features, config['num_classes'])
 
     for param in resnet.parameters():
@@ -43,13 +41,10 @@ if __name__ == '__main__':
         current_epoch = checkpoint['epoch'] + 1
         best_loss = checkpoint['best_loss']
 
-    # loss initialization
     criterion = torch.nn.CrossEntropyLoss()
 
-    # optimizer initialization
     optimizer = torch.optim.Adam(resnet.parameters())
 
-    # data loader initialization
     data_paths = [Path(current_dir, path) for path in data]
 
     train_loader, val_loader = prepare_data(batch_size=config['batch_size'],
@@ -57,15 +52,12 @@ if __name__ == '__main__':
                                             n_splits=config['num_folds'],
                                             paths=data_paths)
 
-    # tensorboard initialization
     train_writer = SummaryWriter(f"{model_dir}/logs/train")
     val_writer = SummaryWriter(f"{model_dir}/logs/val")
 
-    # save json config
     with open(Path(model_dir, "config.json"), 'w') as file:
         json.dump(loaded_json, file)
 
-    # epochs initialization
     total_epochs = current_epoch - 1 + sum(config['epochs'])
 
     for num_epochs, learning_rate, weight_decay in zip(config['epochs'], config['learning_rates'], config['weight_decays']):
@@ -93,12 +85,10 @@ if __name__ == '__main__':
             print(f"loss: {val_loss:.3f}  accuracy: {val_accuracy:.3f}")
             time.sleep(0.1)
 
-            # save last trained model
             torch.save(resnet.state_dict(), f"{model_dir}/last_model.pth")
             with open(f"{model_dir}/last_epoch.txt", 'w') as f:
                 f.write(f"Last epoch: {current_epoch}")
 
-            # save current best model
             if val_loss < best_loss:
                 best_loss = val_loss
 

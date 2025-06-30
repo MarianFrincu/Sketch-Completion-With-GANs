@@ -17,13 +17,15 @@ def crop_detected_region(original, corrupted, image_to_crop):
 
     generated_regions = []
 
+    new_height, new_width = height // 2, width // 2
+
     for i in range(batch_size):
         difference = torch.abs(original[i] - corrupted[i])
 
         mask = difference.sum(dim=0) > 0
 
         if mask.sum() == 0:
-            generated_regions.append(transforms.CenterCrop((128, 128))(corrupted[i]))
+            generated_regions.append(transforms.CenterCrop((new_height, new_width))(corrupted[i]))
             continue
 
         y_coords, x_coords = torch.where(mask)
@@ -37,13 +39,13 @@ def crop_detected_region(original, corrupted, image_to_crop):
         start_x = max(center_x - 64, 0)
         start_y = max(center_y - 64, 0)
 
-        end_x = min(start_x + 128, width)
-        end_y = min(start_y + 128, height)
+        end_x = min(start_x + new_width, width)
+        end_y = min(start_y + new_height, height)
 
-        if end_x - start_x < 128:
-            start_x = max(end_x - 128, 0)
-        if end_y - start_y < 128:
-            start_y = max(end_y - 128, 0)
+        if end_x - start_x < new_width:
+            start_x = max(end_x - new_width, 0)
+        if end_y - start_y < new_height:
+            start_y = max(end_y - new_height, 0)
 
         generated_region = image_to_crop[i][:, start_y:end_y, start_x:end_x]
 

@@ -6,12 +6,12 @@
         "n_critic" : 5,
         "batch_size": 16,
         "lambda_gp" : 10,
-        "models_dir": "../../trained_models/GrayscaleWGAN",
+        "models_dir": "../trained_models/WSketchGAN_11",
         "continue_train": false,
         "gan_to_load": ""
     },
     "data": {
-        "original_dir": "../../datasets/Sketchy/original",
-        "corrupted_dir": "../../datasets/Sketchy/corrupted"
+        "original_dir": "../datasets/Sketchy_split/train/original",
+        "corrupted_dir": "../datasets/Sketchy_split/train/corrupted"
     }
 }

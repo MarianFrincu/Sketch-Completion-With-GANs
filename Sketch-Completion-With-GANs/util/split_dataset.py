@@ -56,16 +56,16 @@ def split_corrupted_dataset(original_split_dir, corrupted_dir, corrupted_split_d
 
 
 if __name__ == '__main__':
-    original_directory = '../datasets/Sketchy/original/all_images'
-    original_split_directory = '../datasets/Sketchy/original'
-    corrupted_directory = '../datasets/Sketchy/corrupted/all_images'
-    corrupted_split_directory = '../datasets/Sketchy/corrupted'
+    original_directory = ''
+    original_split_directory = ''
+    corrupted_directory = ''
+    corrupted_split_directory = ''
 
     split_original_dataset(original_directory,
                            original_split_directory,
-                           train_ratio=0.65,
+                           train_ratio=0.8,
                            val_ratio=0.20,
-                           test_ratio=0.15)
+                           test_ratio=0.0)
     split_corrupted_dataset(original_split_directory,
                             corrupted_directory,
                             corrupted_split_directory)
