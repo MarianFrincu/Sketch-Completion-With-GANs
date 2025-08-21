@@ -5,7 +5,7 @@ The architecture is inspired by [Liu et al.’s SketchGAN](https://openaccess.th
 
 Additionally, a **postprocessing pipeline** is implemented to enhance visual quality, reduce noise, and sharpen contours.
 
-<img width="843" height="357" alt="image" src="https://github.com/user-attachments/assets/07fd9222-c389-4637-b5d6-c3f2ab5cf1ab" />
+<img width="843" height="357" alt="image" src="images/corrupted_to_completed.png" />
 
 The model can be used for AI-assisted creative tools, digital art restoration, and sketch-based image generation.
 
@@ -86,16 +86,16 @@ Numerical scores give a baseline, but **visual inspection is the key indicator**
 
 ## Visual Results
 
-<img width="1275" height="606" alt="image" src="https://github.com/user-attachments/assets/83acaa43-406f-46f1-8e7e-c7da98ec9ad0" />
+<img width="1275" height="606" alt="image" src="images/models_comparition_airplane.png" />
 
-<img width="1275" height="606" alt="image" src="https://github.com/user-attachments/assets/1c8209b2-40ec-427f-879b-a1c7fba30901" />
+<img width="1275" height="606" alt="image" src="images/models_comparition_flower.png" />
 
-<img width="1275" height="606" alt="image" src="https://github.com/user-attachments/assets/4fe96d9b-7f0b-4a2e-99e5-f5e6b5f30815" />
+<img width="1275" height="606" alt="image" src="images/models_comparition_parrot.png" />
 
 ## Postprocessing Impact
 
 Postprocessing steps improved **edge sharpness** and **removed background noise**, making the completions cleaner and more coherent.
 
-<img width="1243" height="657" alt="image" src="https://github.com/user-attachments/assets/ea09b916-f17d-44fb-ba41-fd89278582d5" />
+<img width="1243" height="657" alt="image" src="images/generated_to_postprocessed1.png" />
 
-<img width="1243" height="657" alt="image" src="https://github.com/user-attachments/assets/17d0d956-8655-4eb3-966d-ac1e451bd454" />
+<img width="1243" height="657" alt="image" src="images/generated_to_postprocessed2.png" />
