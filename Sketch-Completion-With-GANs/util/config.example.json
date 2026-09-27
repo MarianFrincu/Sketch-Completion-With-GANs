@@ -1,0 +1,28 @@
+{
+    "filter_dataset": {
+        "sketch_dir": "/path/to/Sketchy/256x256/sketch/tx_000100000000",
+        "output_dir": "../datasets/Sketchy/original",
+        "invalid_files": [
+            "/path/to/Sketchy/info/invalid-error.txt",
+            "/path/to/Sketchy/info/invalid-ambiguous.txt"
+        ]
+    },
+    "corrupt_images": {
+        "original_dir": "../datasets/Sketchy/original",
+        "corrupted_dir": "../datasets/Sketchy/corrupted",
+        "corruption_percent": [
+            10,
+            40
+        ],
+        "seed": 42
+    },
+    "split_dataset": {
+        "original_dir": "../datasets/Sketchy/original",
+        "corrupted_dir": "../datasets/Sketchy/corrupted",
+        "split_dir": "../datasets/Sketchy_split",
+        "train_ratio": 0.8,
+        "val_ratio": 0.0,
+        "test_ratio": 0.2,
+        "seed": 42
+    }
+}

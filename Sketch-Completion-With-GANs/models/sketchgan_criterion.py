@@ -11,7 +11,7 @@ class GeneratorLoss(nn.Module):
         self.l1 = nn.L1Loss()
 
     def forward(self, original, generated, fake_pred, classifier_loss):
-        fake_target = torch.full_like(fake_pred, 1)
+        fake_target = torch.ones_like(fake_pred)
         bce = self.bce(fake_pred, fake_target)
         l1 = self.l1(original, generated)
         loss = (bce + self.lambda1 * l1 + self.lambda2 * classifier_loss)
@@ -19,13 +19,13 @@ class GeneratorLoss(nn.Module):
 
 
 class DiscriminatorLoss(nn.Module):
-    def __init__(self, ):
+    def __init__(self):
         super().__init__()
         self.bce = nn.BCELoss()
 
     def forward(self, real_pred, fake_pred):
-        real_target = torch.full_like(real_pred, 1)
-        fake_target = torch.full_like(fake_pred, 0)
+        real_target = torch.ones_like(real_pred)
+        fake_target = torch.zeros_like(fake_pred)
         real_target_loss = self.bce(real_pred, real_target)
         fake_target_loss = self.bce(fake_pred, fake_target)
         loss = real_target_loss + fake_target_loss

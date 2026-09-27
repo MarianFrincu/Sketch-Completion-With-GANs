@@ -112,16 +112,25 @@ class GeneratorModule(nn.Module):
         return u8
 
 class Generator(nn.Module):
-    def __init__(self, in_channels, out_channels, out_activation=None):
+    def __init__(self, in_channels=1, value_range='11'):
         super().__init__()
+
+        if value_range not in ('01', '11'):
+            raise ValueError("value_range must be '01' or '11'")
+
+        self.in_channels = in_channels
+        self.out_channels = in_channels
+        self.value_range = value_range
+
+        out_activation = nn.Tanh() if value_range == '11' else nn.Sigmoid()
 
         self.preprocess_network_stage1 = PreprocessingNetwork(in_channels=in_channels)
         self.preprocess_network_stage2 = PreprocessingNetwork(in_channels=2 * in_channels)
         self.preprocess_network_stage3 = PreprocessingNetwork(in_channels=3 * in_channels)
 
-        self.stage1 = GeneratorModule(in_channels, out_channels, out_activation)
-        self.stage2 = GeneratorModule(2 * in_channels, out_channels, out_activation)
-        self.stage3 = GeneratorModule(3 * in_channels, out_channels, out_activation)
+        self.stage1 = GeneratorModule(in_channels, self.out_channels, out_activation)
+        self.stage2 = GeneratorModule(2 * in_channels, self.out_channels, out_activation)
+        self.stage3 = GeneratorModule(3 * in_channels, self.out_channels, out_activation)
 
     def forward(self, x):
         stage1_input = self.preprocess_network_stage1(x)
@@ -136,3 +145,19 @@ class Generator(nn.Module):
         stage3_output = self.stage3(stage3_input)
 
         return stage3_output
+
+    def normalize(self, image):
+        return image * 2 - 1 if self.value_range == '11' else image
+
+    def denormalize(self, image):
+        return (image + 1) / 2 if self.value_range == '11' else image
+
+    def get_config(self):
+        return {'in_channels': self.in_channels, 'value_range': self.value_range}
+
+
+def load_generator(path, device):
+    checkpoint = torch.load(path, map_location=device, weights_only=True)
+    generator = Generator(**checkpoint['generator_config'])
+    generator.load_state_dict(checkpoint['generator_state_dict'])
+    return generator.to(device)

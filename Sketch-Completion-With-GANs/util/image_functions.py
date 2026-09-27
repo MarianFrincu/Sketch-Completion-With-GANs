@@ -2,7 +2,6 @@ import torch
 import random
 import torchvision.transforms.functional as functional
 import torchvision.transforms as transforms
-from torchvision.transforms import ToPILImage
 
 
 def random_shift(image, max_shift=32):
@@ -19,13 +18,15 @@ def crop_detected_region(original, corrupted, image_to_crop):
 
     new_height, new_width = height // 2, width // 2
 
+    center_crop = transforms.CenterCrop((new_height, new_width))
+
     for i in range(batch_size):
         difference = torch.abs(original[i] - corrupted[i])
 
         mask = difference.sum(dim=0) > 0
 
         if mask.sum() == 0:
-            generated_regions.append(transforms.CenterCrop((new_height, new_width))(corrupted[i]))
+            generated_regions.append(center_crop(image_to_crop[i]))
             continue
 
         y_coords, x_coords = torch.where(mask)
@@ -36,8 +37,8 @@ def crop_detected_region(original, corrupted, image_to_crop):
         center_x = (min_x + max_x) // 2
         center_y = (min_y + max_y) // 2
 
-        start_x = max(center_x - 64, 0)
-        start_y = max(center_y - 64, 0)
+        start_x = max(center_x - new_width // 2, 0)
+        start_y = max(center_y - new_height // 2, 0)
 
         end_x = min(start_x + new_width, width)
         end_y = min(start_y + new_height, height)
@@ -52,5 +53,3 @@ def crop_detected_region(original, corrupted, image_to_crop):
         generated_regions.append(generated_region)
 
     return torch.stack(generated_regions)
-
-

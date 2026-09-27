@@ -184,9 +184,16 @@ fabric.properties
 # idea folder, uncomment if you don't need it
 .idea
 
+.vscode
+
 # Datasets
 Sketch-Completion-With-GANs/datasets
 
 # Trained models
 Sketch-Completion-With-GANs/trained_models
 
+# Configs
+config.json
+
+# Completed sketches
+Sketch-Completion-With-GANs/completed_sketches

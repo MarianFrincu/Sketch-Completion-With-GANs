@@ -4,9 +4,20 @@ import numpy as np
 import torch
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import resnet18, ResNet18_Weights
 
 from resnet18_classifier_train.model_funcs import train_model, validate_model, prepare_data
+from models.resnet18_classifier import Resnet18Classifier
+from util.reproducibility import set_seed
+
+
+def save_checkpoint(path, model, optimizer, epoch, best_loss):
+    torch.save({"state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "num_classes": model.num_classes,
+                "epoch": epoch,
+                "best_loss": best_loss},
+               path)
+
 
 if __name__ == '__main__':
 
@@ -19,18 +30,18 @@ if __name__ == '__main__':
     config = loaded_json['config']
     data = loaded_json['data']
 
+    set_seed(config['seed'])
+
     model_dir = Path(current_dir, config['model_dir'])
+    model_dir.mkdir(parents=True, exist_ok=True)
 
-    resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
-    resnet.fc = torch.nn.Linear(resnet.fc.in_features, config['num_classes'])
-
-    for param in resnet.parameters():
-        param.requires_grad = not config['freeze']
-
-    for param in resnet.fc.parameters():
-        param.requires_grad = True
-
+    resnet = Resnet18Classifier(config['num_classes'])
+    resnet.freeze_backbone(config['freeze'])
     resnet.to(device)
+
+    criterion = torch.nn.CrossEntropyLoss()
+
+    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, resnet.parameters()))
 
     current_epoch = 1
     best_loss = np.inf
@@ -38,32 +49,27 @@ if __name__ == '__main__':
     if config['continue_train']:
         checkpoint = torch.load(Path(current_dir, config['model_to_load']), map_location=device, weights_only=True)
         resnet.load_state_dict(checkpoint['state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         current_epoch = checkpoint['epoch'] + 1
         best_loss = checkpoint['best_loss']
 
-    criterion = torch.nn.CrossEntropyLoss()
-
-    optimizer = torch.optim.Adam(resnet.parameters())
-
-    data_paths = [Path(current_dir, path) for path in data]
-
     train_loader, val_loader = prepare_data(batch_size=config['batch_size'],
-                                            num_workers=10,
-                                            n_splits=config['num_folds'],
-                                            paths=data_paths)
+                                            num_workers=config['num_workers'],
+                                            train_size=config['train_size'],
+                                            paths=[Path(current_dir, path) for path in data])
 
     train_writer = SummaryWriter(f"{model_dir}/logs/train")
     val_writer = SummaryWriter(f"{model_dir}/logs/val")
 
     with open(Path(model_dir, "config.json"), 'w') as file:
-        json.dump(loaded_json, file)
+        json.dump(loaded_json, file, indent=4)
 
     total_epochs = current_epoch - 1 + sum(config['epochs'])
 
     for num_epochs, learning_rate, weight_decay in zip(config['epochs'], config['learning_rates'], config['weight_decays']):
 
-        optimizer.lr = learning_rate
-        optimizer.weight_decay = weight_decay
+        optimizer.param_groups[0]['lr'] = learning_rate
+        optimizer.param_groups[0]['weight_decay'] = weight_decay
 
         for _ in range(num_epochs):
             print(f"\nEpoch {current_epoch}/{total_epochs}")
@@ -85,16 +91,16 @@ if __name__ == '__main__':
             print(f"loss: {val_loss:.3f}  accuracy: {val_accuracy:.3f}")
             time.sleep(0.1)
 
-            torch.save(resnet.state_dict(), f"{model_dir}/last_model.pth")
-            with open(f"{model_dir}/last_epoch.txt", 'w') as f:
-                f.write(f"Last epoch: {current_epoch}")
-
             if val_loss < best_loss:
                 best_loss = val_loss
 
-                torch.save(resnet.state_dict(), f"{model_dir}/best_model.pth")
+                save_checkpoint(f"{model_dir}/best_model.pth", resnet, optimizer, current_epoch, best_loss)
                 with open(f"{model_dir}/best_epoch.txt", 'w') as f:
                     f.write(f"Best model epoch: {current_epoch}")
+
+            save_checkpoint(f"{model_dir}/last_model.pth", resnet, optimizer, current_epoch, best_loss)
+            with open(f"{model_dir}/last_epoch.txt", 'w') as f:
+                f.write(f"Last epoch: {current_epoch}")
 
             current_epoch += 1
 

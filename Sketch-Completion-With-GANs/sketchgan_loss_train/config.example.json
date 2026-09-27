@@ -1,13 +1,16 @@
 {
     "config": {
+        "seed": 42,
+        "value_range": "01",
         "num_epochs": 200,
-        "generator_learning_rate": 2e-4,
-        "discriminator_learning_rate": 2e-4,
+        "generator_learning_rate": 0.0002,
+        "discriminator_learning_rate": 0.0002,
         "batch_size": 16,
         "lambda1": 100,
         "lambda2": 0.5,
-        "classifier_classes": 125,
-        "models_dir": "../trained_models/GrayscaleSketchGAN_11",
+        "num_workers": 10,
+        "save_every": 10,
+        "models_dir": "../trained_models/sketchgan01",
         "classifier_to_load": "../trained_models/resnet18_finetune_Sketchy/best_model.pth",
         "continue_train": false,
         "gan_to_load": ""

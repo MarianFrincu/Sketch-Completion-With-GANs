@@ -1,0 +1,33 @@
+{
+    "config": {
+        "seed": 42,
+        "epochs": [
+            100
+        ],
+        "learning_rates": [
+            0.0001
+        ],
+        "weight_decays": [
+            0
+        ],
+        "batch_size": 135,
+        "train_size": 0.7,
+        "num_classes": 125,
+        "freeze": false,
+        "num_workers": 10,
+        "model_dir": "../trained_models/resnet18_finetune_Sketchy",
+        "continue_train": false,
+        "model_to_load": ""
+    },
+    "data": [
+        "../datasets/Sketchy_split/train/original"
+    ],
+    "evaluate": {
+        "model_to_evaluate": "../trained_models/resnet18_finetune_Sketchy/best_model.pth",
+        "data": [
+            "../datasets/Sketchy_split/test/original"
+        ],
+        "batch_size": 135,
+        "num_workers": 10
+    }
+}

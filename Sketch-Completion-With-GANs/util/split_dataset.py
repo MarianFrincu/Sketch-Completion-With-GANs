@@ -1,71 +1,52 @@
-import os
+import json
+import math
+import random
 import shutil
-
-from sklearn.model_selection import train_test_split
-
-
-def split_original_dataset(original_dir, original_split_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
-    assert train_ratio + val_ratio + test_ratio == 1.0, "The sum of ratios must be 1."
-
-    if not os.path.exists(original_split_dir):
-        os.makedirs(original_split_dir)
-
-    for subset in ['train', 'val', 'test']:
-        subset_path = os.path.join(original_split_dir, subset)
-        if not os.path.exists(subset_path):
-            os.makedirs(subset_path)
-
-    for class_folder in os.listdir(original_dir):
-        class_folder_path = os.path.join(original_dir, class_folder)
-        if os.path.isdir(class_folder_path):
-            images = [os.path.join(class_folder_path, img) for img in os.listdir(class_folder_path) if
-                      os.path.isfile(os.path.join(class_folder_path, img))]
-
-            train_images, test_images = train_test_split(images, test_size=(1 - train_ratio))
-            val_images, test_images = train_test_split(test_images, test_size=(test_ratio / (test_ratio + val_ratio)))
-
-            for subset, subset_images in zip(['train', 'val', 'test'], [train_images, val_images, test_images]):
-                subset_class_path = os.path.join(original_split_dir, subset, class_folder)
-                os.makedirs(subset_class_path, exist_ok=True)
-                for image in subset_images:
-                    shutil.copy2(image, os.path.join(str(subset_class_path), os.path.basename(image)))
+from pathlib import Path
 
 
-def split_corrupted_dataset(original_split_dir, corrupted_dir, corrupted_split_dir):
-    if not os.path.exists(corrupted_split_dir):
-        os.makedirs(corrupted_split_dir)
+def split_dataset(original_dir, corrupted_dir, split_dir, train_ratio=0.8, val_ratio=0.0, test_ratio=0.2, seed=42):
+    if not math.isclose(train_ratio + val_ratio + test_ratio, 1.0):
+        raise ValueError("The sum of ratios must be 1.")
 
-    for subset in ['train', 'val', 'test']:
-        subset_path = os.path.join(original_split_dir, subset)
-        corrupted_subset_path = os.path.join(corrupted_split_dir, subset)
+    Path(split_dir).mkdir(parents=True)
 
-        for class_folder in os.listdir(subset_path):
-            original_class_folder_path = os.path.join(subset_path, class_folder)
-            corrupted_class_folder_path = os.path.join(corrupted_dir, class_folder)
-            corrupted_subset_class_path = os.path.join(corrupted_subset_path, class_folder)
+    rng = random.Random(seed)
 
-            if os.path.isdir(original_class_folder_path):
-                os.makedirs(corrupted_subset_class_path, exist_ok=True)
+    for class_folder in sorted(Path(original_dir).iterdir()):
+        if not class_folder.is_dir():
+            continue
 
-                for image_name in os.listdir(original_class_folder_path):
-                    original_image_path = os.path.join(original_class_folder_path, image_name)
-                    corrupted_image_path = os.path.join(corrupted_class_folder_path, image_name)
+        corrupted_class_folder = Path(corrupted_dir, class_folder.name)
+        images = sorted(image.name for image in class_folder.iterdir()
+                        if image.is_file() and (corrupted_class_folder / image.name).is_file())
+        rng.shuffle(images)
 
-                    if os.path.isfile(original_image_path) and os.path.isfile(corrupted_image_path):
-                        shutil.copy2(corrupted_image_path, os.path.join(corrupted_subset_class_path, image_name))
+        train_end = round(len(images) * train_ratio)
+        val_end = round(len(images) * (train_ratio + val_ratio))
+        subsets = {'train': images[:train_end], 'val': images[train_end:val_end], 'test': images[val_end:]}
+
+        for subset, subset_images in subsets.items():
+            if not subset_images:
+                continue
+
+            for kind, source_folder in (('original', class_folder), ('corrupted', corrupted_class_folder)):
+                destination = Path(split_dir, subset, kind, class_folder.name)
+                destination.mkdir(parents=True, exist_ok=True)
+                for image_name in subset_images:
+                    shutil.copy2(source_folder / image_name, destination / image_name)
 
 
 if __name__ == '__main__':
-    original_directory = ''
-    original_split_directory = ''
-    corrupted_directory = ''
-    corrupted_split_directory = ''
+    current_dir = Path(__file__).parent
 
-    split_original_dataset(original_directory,
-                           original_split_directory,
-                           train_ratio=0.8,
-                           val_ratio=0.20,
-                           test_ratio=0.0)
-    split_corrupted_dataset(original_split_directory,
-                            corrupted_directory,
-                            corrupted_split_directory)
+    with open(Path(current_dir, "config.json"), 'r') as file:
+        config = json.load(file)['split_dataset']
+
+    split_dataset(original_dir=Path(current_dir, config['original_dir']),
+                  corrupted_dir=Path(current_dir, config['corrupted_dir']),
+                  split_dir=Path(current_dir, config['split_dir']),
+                  train_ratio=config['train_ratio'],
+                  val_ratio=config['val_ratio'],
+                  test_ratio=config['test_ratio'],
+                  seed=config['seed'])

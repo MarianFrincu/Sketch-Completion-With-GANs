@@ -1,0 +1,18 @@
+{
+    "compute_metrics": {
+        "checkpoint": "trained_models/sketchgan_11/last_gan.pth",
+        "data_dir": "datasets/Sketchy_split/test",
+        "output_dir": "trained_models/sketchgan_11/generated_images",
+        "postprocess": false,
+        "batch_size": 16,
+        "num_workers": 4
+    },
+    "complete_sketch": {
+        "checkpoint": "trained_models/sketchgan_11/last_gan.pth",
+        "images": [
+            "path/to/sketch.png"
+        ],
+        "output_dir": "completed_sketches",
+        "postprocess": true
+    }
+}

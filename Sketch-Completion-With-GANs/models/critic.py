@@ -8,6 +8,8 @@ class Critic(nn.Module):
         if input_shape is None:
             input_shape = [1, 256, 256]  # [channels, height, width]
 
+        self.input_shape = input_shape
+
         self.model = nn.Sequential(
             nn.Conv2d(in_channels=input_shape[0], out_channels=64, kernel_size=5, stride=2, padding=2, bias=False),
             nn.InstanceNorm2d(num_features=64, affine=True),
@@ -35,3 +37,6 @@ class Critic(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+    def get_config(self):
+        return {'input_shape': self.input_shape}

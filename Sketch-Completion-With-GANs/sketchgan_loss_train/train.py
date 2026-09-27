@@ -1,24 +1,36 @@
 import json
 import time
-import numpy as np
 import torch
 import torch.nn as nn
 from pathlib import Path
 
-import torchvision
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import resnet18
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
 from models.sketchgan_discriminator import Discriminator
 from models.sketchgan_generator import Generator
 from models.sketchgan_criterion import DiscriminatorLoss, GeneratorLoss
+from models.resnet18_classifier import load_classifier, IMAGENET_MEAN, IMAGENET_STD
 from util.dual_image_folder_dataset import DualImageFolderDataset
 from util.text_format_consts import FONT_COLOR, BAR_FORMAT, RESET_COLOR
 from util.image_functions import crop_detected_region
+from util.reproducibility import set_seed
+
+
+def save_checkpoint(path, generator, discriminator, gen_optim, disc_optim, epoch, gen_loss, disc_loss):
+    torch.save(obj={"generator_config": generator.get_config(),
+                    "generator_state_dict": generator.state_dict(),
+                    "discriminator_config": discriminator.get_config(),
+                    "discriminator_state_dict": discriminator.state_dict(),
+                    "gen_optim_state_dict": gen_optim.state_dict(),
+                    "disc_optim_state_dict": disc_optim.state_dict(),
+                    "epoch": epoch,
+                    "gen_loss": gen_loss,
+                    "disc_loss": disc_loss,
+                    }, f=path)
 
 
 if __name__ == "__main__":
@@ -32,34 +44,22 @@ if __name__ == "__main__":
     config = loaded_json['config']
     data = loaded_json['data']
 
+    set_seed(config['seed'])
+
     # models initialization
     models_dir = Path(current_dir, config['models_dir'])
+    models_dir.mkdir(parents=True, exist_ok=True)
 
-    generator = Generator(in_channels=1, out_channels=1, out_activation=nn.Tanh())
+    generator = Generator(in_channels=1, value_range=config['value_range'])
     discriminator = Discriminator(global_shape=[1, 256, 256], local_shape=[1, 128, 128])
-    classifier = resnet18()
-    classifier.fc = nn.Linear(classifier.fc.in_features, out_features=config['classifier_classes'])
 
     generator.to(device)
     discriminator.to(device)
-    classifier.to(device)
 
     # classifier model load
-    classifier.load_state_dict(torch.load(Path(current_dir, config['classifier_to_load']),
-                                          weights_only=True,
-                                          map_location=device
-                                          ))
-
-    # gan models load if continue train
-    current_epoch = 1
-    gen_best_loss = np.inf
-
-    if config['continue_train']:
-        checkpoint = torch.load(Path(current_dir, config['gan_to_load']), map_location=device, weights_only=True)
-        generator.load_state_dict(checkpoint['generator_state_dict'])
-        discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
-        current_epoch = checkpoint['epoch'] + 1
-        gen_best_loss = checkpoint['gen_loss']
+    classifier = load_classifier(Path(current_dir, config['classifier_to_load']), device)
+    classifier.eval()
+    classifier.requires_grad_(False)
 
     # losses initialization
     gen_criterion = GeneratorLoss(lambda1=config['lambda1'], lambda2=config['lambda2'])
@@ -70,17 +70,27 @@ if __name__ == "__main__":
     gen_optim = optim.Adam(generator.parameters(), lr=config['generator_learning_rate'], betas=(0.5, 0.999))
     disc_optim = optim.Adam(discriminator.parameters(), lr=config['discriminator_learning_rate'], betas=(0.5, 0.999))
 
+    # gan models load if continue train
+    current_epoch = 1
+
+    if config['continue_train']:
+        checkpoint = torch.load(Path(current_dir, config['gan_to_load']), map_location=device, weights_only=True)
+        generator.load_state_dict(checkpoint['generator_state_dict'])
+        discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+        gen_optim.load_state_dict(checkpoint['gen_optim_state_dict'])
+        disc_optim.load_state_dict(checkpoint['disc_optim_state_dict'])
+        current_epoch = checkpoint['epoch'] + 1
+
     # data transforms initialization
     gan_transform = transforms.Compose([
         transforms.Resize((256, 256)),
         transforms.Grayscale(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
+        transforms.ToTensor()
     ])
 
     classifier_transform = transforms.Compose([
-        transforms.Lambda(lambda tensor: tensor.repeat(3, 1, 1)),
-        transforms.Resize((224, 224))
+        transforms.Resize((224, 224)),
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
     ])
 
     # data loader initialization
@@ -89,19 +99,19 @@ if __name__ == "__main__":
                                                        transform=gan_transform),
                         batch_size=config['batch_size'],
                         shuffle=True,
-                        num_workers=10)
+                        num_workers=config['num_workers'],
+                        pin_memory=True,
+                        drop_last=True)
 
     # tensorboard initialization
     gan_writer = SummaryWriter(f"{models_dir}/logs/train")
 
     # save json config
-    with open(Path(models_dir, "config2.json"), 'w') as file:
-        json.dump(loaded_json, file)
+    with open(Path(models_dir, "config.json"), 'w') as file:
+        json.dump(loaded_json, file, indent=4)
 
     # epochs initialization
     total_epochs = current_epoch - 1 + config['num_epochs']
-
-    counter = 10  # used for saving the model each n epochs
 
     for _ in range(config['num_epochs']):
         print(f"{FONT_COLOR}\nEpoch {current_epoch}/{total_epochs}")
@@ -109,28 +119,31 @@ if __name__ == "__main__":
 
         gen_epoch_loss = 0.0
         disc_epoch_loss = 0.0
+        num_samples = 0
 
         with tqdm(loader, desc='Train', bar_format=BAR_FORMAT) as tqdm_loader:
-            for i, (original, corrupted, labels) in enumerate(tqdm_loader):
-                original, corrupted, labels = original.to(device), corrupted.to(device), labels.to(device)
+            for original, corrupted, labels in tqdm_loader:
+                original = generator.normalize(original.to(device, non_blocking=True))
+                corrupted = generator.normalize(corrupted.to(device, non_blocking=True))
+                labels = labels.to(device, non_blocking=True)
 
                 generated = generator(corrupted)
                 original_crop = crop_detected_region(original, corrupted, original)
                 generated_crop = crop_detected_region(original, corrupted, generated)
 
                 disc_optim.zero_grad()
-                fake_pred = discriminator(corrupted, generated_crop.detach())
-                real_pred = discriminator(corrupted, original_crop)
+                real_pred = discriminator(original, original_crop)
+                fake_pred = discriminator(generated.detach(), generated_crop.detach())
                 disc_loss = disc_criterion(real_pred, fake_pred)
 
                 disc_loss.backward()
                 disc_optim.step()
 
                 gen_optim.zero_grad()
-                predicted_labels = classifier(torch.stack([classifier_transform(img) for img in generated]))
-                classifier_loss = classifier_criterion(predicted_labels, labels)
+                classifier_input = classifier_transform(generator.denormalize(generated).repeat(1, 3, 1, 1))
+                classifier_loss = classifier_criterion(classifier(classifier_input), labels)
 
-                fake_pred = discriminator(corrupted, generated_crop)
+                fake_pred = discriminator(generated, generated_crop)
                 gen_loss = gen_criterion(original, generated, fake_pred, classifier_loss)
 
                 gen_loss.backward()
@@ -138,14 +151,15 @@ if __name__ == "__main__":
 
                 gen_epoch_loss += gen_loss.item() * labels.size(0)
                 disc_epoch_loss += disc_loss.item() * labels.size(0)
+                num_samples += labels.size(0)
 
                 tqdm_loader.set_postfix({
                     f"{FONT_COLOR}Generator loss": f"{gen_loss.item():.3f}",
                     f"{FONT_COLOR}Discriminator loss": f"{disc_loss.item():.3f}"
                 })
 
-        gen_epoch_loss /= len(loader.dataset)
-        disc_epoch_loss /= len(loader.dataset)
+        gen_epoch_loss /= num_samples
+        disc_epoch_loss /= num_samples
 
         print(f"{FONT_COLOR}Generator epoch loss: {gen_epoch_loss:.3f}")
         print(f"{FONT_COLOR}Discriminator epoch loss: {disc_epoch_loss:.3f}")
@@ -155,20 +169,12 @@ if __name__ == "__main__":
         gan_writer.flush()
 
         # saving models
-        if current_epoch % counter == 0:
-            torch.save(obj={"generator_state_dict": generator.state_dict(),
-                            "discriminator_state_dict": discriminator.state_dict(),
-                            "epoch": current_epoch,
-                            "gen_loss": gen_epoch_loss,
-                            "disc_loss": disc_epoch_loss,
-                            }, f=f"{models_dir}/epoch_{current_epoch}_gan.pth")
+        if current_epoch % config['save_every'] == 0:
+            save_checkpoint(f"{models_dir}/epoch_{current_epoch}_gan.pth", generator, discriminator,
+                            gen_optim, disc_optim, current_epoch, gen_epoch_loss, disc_epoch_loss)
 
-        torch.save(obj={"generator_state_dict": generator.state_dict(),
-                        "discriminator_state_dict": discriminator.state_dict(),
-                        "epoch": current_epoch,
-                        "gen_loss": gen_epoch_loss,
-                        "disc_loss": disc_epoch_loss,
-                        }, f=f"{models_dir}/last_gan.pth")
+        save_checkpoint(f"{models_dir}/last_gan.pth", generator, discriminator,
+                        gen_optim, disc_optim, current_epoch, gen_epoch_loss, disc_epoch_loss)
 
         current_epoch += 1
 

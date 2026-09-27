@@ -1,49 +1,46 @@
-import os
+import json
 import torch
 import torch.nn as nn
+from pathlib import Path
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
-from torchvision.models import resnet18
 from torch.utils.data import DataLoader, ConcatDataset
 
-from util.c_dataset import CDataset
+from models.resnet18_classifier import load_classifier, IMAGENET_MEAN, IMAGENET_STD
 from resnet18_classifier_train.model_funcs import validate_model
 
 if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    num_workers = 10
-    batch_size = 135
+    current_dir = Path(__file__).parent
 
-    resnet = resnet18()
-    resnet.fc = nn.Linear(resnet.fc.in_features, 125)
+    with open(Path(current_dir, "config.json"), 'r') as file:
+        config = json.load(file)['evaluate']
+
+    resnet = load_classifier(Path(current_dir, config['model_to_evaluate']), device)
 
     criterion = nn.CrossEntropyLoss()
 
-    model_to_load = "../trained_models/resnet18_finetune_Sketchy/best_model.pth"
-
-    paths = ["../datasets/Sketchy_split/test"]
-
-    combined_dataset = ConcatDataset([ImageFolder(root=path) for path in paths])
-
     test_transforms = transforms.Compose([
         transforms.Resize((224, 224)),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
     ])
 
-    test_loader = DataLoader(CDataset(combined_dataset, test_transforms),
-                             batch_size=batch_size,
-                             shuffle=True,
-                             num_workers=num_workers)
+    datasets = [ImageFolder(root=Path(current_dir, path), transform=test_transforms) for path in config['data']]
 
-    if os.path.isfile(f'{model_to_load}'):
-        resnet.load_state_dict(torch.load(f'{model_to_load}', weights_only=True))
-        resnet.to(device)
+    if any(dataset.classes != datasets[0].classes for dataset in datasets):
+        raise ValueError("All data folders must contain the same classes")
 
-        test_loss, test_accuracy = validate_model(resnet, test_loader, criterion, device)
+    combined_dataset = ConcatDataset(datasets)
 
-        print(f'loss: {test_loss:.3f}  accuracy: {test_accuracy:.3f}')
+    test_loader = DataLoader(combined_dataset,
+                             batch_size=config['batch_size'],
+                             shuffle=False,
+                             num_workers=config['num_workers'],
+                             pin_memory=True)
 
-    else:
-        print('No model found')
+    test_loss, test_accuracy = validate_model(resnet, test_loader, criterion, device)
+
+    print(f'loss: {test_loss:.3f}  accuracy: {test_accuracy:.3f}')

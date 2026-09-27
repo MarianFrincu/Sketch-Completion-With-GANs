@@ -15,6 +15,9 @@ class Discriminator(nn.Module):
         if local_shape is None:
             local_shape = [1, 128, 128]
 
+        self.global_shape = global_shape
+        self.local_shape = local_shape
+
         self.global_discriminator = GlobalDiscriminator(input_shape=global_shape)
         self.local_discriminator = LocalDiscriminator(input_shape=local_shape)
         self.fully_connected = nn.Linear(2048, 1)
@@ -27,3 +30,6 @@ class Discriminator(nn.Module):
         z = self.fully_connected(torch.cat([y, x], dim=1))
 
         return (torch.tanh(z) + 1) / 2
+
+    def get_config(self):
+        return {'global_shape': self.global_shape, 'local_shape': self.local_shape}

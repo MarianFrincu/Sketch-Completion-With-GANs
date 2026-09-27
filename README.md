@@ -12,17 +12,75 @@ The model can be used for AI-assisted creative tools, digital art restoration, a
 ## Architecture
 
 The project uses the generator and discriminator proposed by [Liu et al.’s SketchGAN](https://openaccess.thecvf.com/content_CVPR_2019/papers/Liu_SketchGAN_Joint_Sketch_Completion_and_Recognition_With_Generative_Adversarial_Network_CVPR_2019_paper.pdf), alongside an auxiliary classifier based on [ResNet-18](https://arxiv.org/abs/1512.03385) and a critic inspired by the global discriminator from the original SketchGAN architecture.  
+
+As in the paper, the SketchGAN discriminator has two branches: the global discriminator sees the entire sketch (the original or the completed one) to judge its overall coherence, and the local discriminator sees a 128×128 crop centered on the completed region. Although the paper's formula writes $D(x, y)$, where $x$ is the corrupted input, the implementation follows the paper's text, which states that the discriminator does not observe $x$.
+
 The critic was adapted to meet the requirements of the [Wasserstein GAN](https://arxiv.org/pdf/1704.00028), including modifications such as replacing Batch Normalization with Instance Normalization, switching from ReLU to LeakyReLU activations, and removing the final activation to allow unbounded scalar outputs.
+
+The generator's value range is set by `value_range` in the config: `"01"` uses a Sigmoid output and [0, 1] inputs, `"11"` uses a Tanh output and [−1, 1] inputs. The range is saved in every checkpoint, so loading a generator restores it automatically.
 
 ## Dataset
 
-The project uses the [Sketchy](http://sketchy.eye.gatech.edu/) dataset, a large-scale collection of **75,471** hand-drawn sketches across **125** object categories. For training stability, sketches labeled as *Error* or *Ambiguous* were removed, leaving **68,320** cleaned sketches.
+The project uses the [Sketchy](http://sketchy.eye.gatech.edu/) dataset, a large-scale collection of **75,471** hand-drawn sketches (as reported in the Sketchy paper) across **125** object categories. For training stability, sketches labeled as *Error* or *Ambiguous* were removed, leaving **68,320** cleaned sketches.
+The Sketchy variant that was used is `256x256/sketch/tx_000100000000`.
 
 To simulate incomplete sketches for the completion task, random white rectangular masks were applied, removing **10–40%** of each sketch. The dataset is split **80%/20%** for training and testing.
 
+## Setup
+
+Tested with Python 3.14.
+
+```bash
+pip install -r requirements.txt
+cd Sketch-Completion-With-GANs
+```
+
+The project was trained with the CUDA 12.6 build of PyTorch. To install the same build, use:
+
+```bash
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu126
+```
+
+All commands below are run from the inner `Sketch-Completion-With-GANs/` folder, with `python -m` so that the `models` and `util` packages can be imported.
+
+Every script reads its settings from a `config.json` placed next to it. Each folder has a `config.example.json`: copy it to `config.json` (ignored by git) and set your paths, which are relative to that folder.
+
+### Data preparation
+
+Configured in `util/config.json`:
+
+```bash
+python -m util.filter_dataset   # remove the sketches labeled as Error or Ambiguous
+python -m util.corrupt_images   # remove a random rectangle covering 10-40% of each sketch
+python -m util.split_dataset    # split into train/test (80/20), keeping each original paired with its corrupted version
+```
+
+This produces `datasets/Sketchy_split/{train,test}/{original,corrupted}/<class>/`.
+
+### Training
+
+```bash
+python -m resnet18_classifier_train.train      # resnet18_classifier_train/config.json
+python -m resnet18_classifier_train.evaluate   # "evaluate" section of the same config
+
+python -m sketchgan_loss_train.train           # sketchgan_loss_train/config.json
+python -m wasserstein_loss_train.train         # wasserstein_loss_train/config.json
+```
+
+The classifier must be trained first, since the SketchGAN loss uses it. Training logs are written for TensorBoard in `<models_dir>/logs`.
+
+### Evaluation and inference
+
+Configured in `config.json` next to the scripts:
+
+```bash
+python -m compute_metrics   # complete the test set, save the images and print the metrics
+python -m complete_sketch   # complete your own sketches
+```
+
 ## Training
 
-The model was trained on the cleaned and augmented **Sketchy** dataset (256×256 images, batch size 16) using two adversarial setups:
+The model was trained on the cleaned and corrupted **Sketchy** dataset (256×256 images, batch size 16) using two adversarial setups:
 
 ### 1. SketchGAN (Adversarial + L1 + Classification)
 
@@ -46,9 +104,10 @@ Focuses on **training stability** and improved convergence.
 
 ### 3. Auxiliary Classifier (ResNet-18)
 
-* Trained independently with **Cross-Entropy Loss** on Sketchy
-* Augmentations: random crop (224×224), horizontal flip, random affine (±32 px)
+* Trained independently with **Cross-Entropy Loss** on the training split (70% for training, 30% for validation) and evaluated on the test split
+* Input resized to 224×224, augmented with horizontal flip and random shift (±32 px)
 * **Optimizer**: Adam, lr=0.0001, β₁=0.9, β₂=0.999
+
 
 After convergence, it was integrated into the generator’s loss to guide semantic consistency.
 
@@ -77,20 +136,20 @@ Numerical scores give a baseline, but **visual inspection is the key indicator**
 
 ### Model Codes
 
-| Code           | Description                                     |
-| -------------- | ----------------------------------------------- |
-| sketchgan01    | GAN + L1 + classification loss, output \[0, 1]  |
-| sketchgan\_11  | GAN + L1 + classification loss, output \[−1, 1] |
-| wsketchgan01   | WGAN-GP loss, output \[0, 1]                    |
-| wsketchgan\_11 | WGAN-GP loss, output \[−1, 1]                   |
+| Code           | Description                                     | Training script          | `value_range` |
+| -------------- | ----------------------------------------------- | ------------------------ | ------------- |
+| sketchgan01    | GAN + L1 + classification loss, output \[0, 1]  | `sketchgan_loss_train`   | `"01"`        |
+| sketchgan\_11  | GAN + L1 + classification loss, output \[−1, 1] | `sketchgan_loss_train`   | `"11"`        |
+| wsketchgan01   | WGAN-GP loss, output \[0, 1]                    | `wasserstein_loss_train` | `"01"`        |
+| wsketchgan\_11 | WGAN-GP loss, output \[−1, 1]                   | `wasserstein_loss_train` | `"11"`        |
 
 ## Visual Results
 
-<img width="1275" height="606" alt="image" src="images/models_comparition_airplane.png" />
+<img width="1275" height="606" alt="image" src="images/models_comparison_airplane.png" />
 
-<img width="1275" height="606" alt="image" src="images/models_comparition_flower.png" />
+<img width="1275" height="606" alt="image" src="images/models_comparison_flower.png" />
 
-<img width="1275" height="606" alt="image" src="images/models_comparition_parrot.png" />
+<img width="1275" height="606" alt="image" src="images/models_comparison_parrot.png" />
 
 ## Postprocessing Impact
 
