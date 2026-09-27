@@ -158,3 +158,7 @@ Postprocessing steps improved **edge sharpness** and **removed background noise*
 <img width="1243" height="657" alt="image" src="images/generated_to_postprocessed1.png" />
 
 <img width="1243" height="657" alt="image" src="images/generated_to_postprocessed2.png" />
+
+## License
+
+This project is licensed under the [MIT License](LICENSE). If you use this code, please cite it using the "Cite this repository" button on GitHub (see [CITATION.cff](CITATION.cff)).

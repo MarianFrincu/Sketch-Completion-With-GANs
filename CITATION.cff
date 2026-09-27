@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite it as below."
+title: "Sketch Completion With Generative Adversarial Networks"
+authors:
+  - family-names: Frincu
+    given-names: Marian
+repository-code: "https://github.com/MarianFrincu/Sketch-Completion-With-GANs"
+license: MIT
